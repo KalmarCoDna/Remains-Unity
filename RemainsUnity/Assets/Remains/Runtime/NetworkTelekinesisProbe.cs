@@ -24,7 +24,11 @@ namespace Remains.Runtime
         private bool ContainerScenario=>runtime.Options.Smoke.Contains("-container-");
         private string initialItems;
         private Vector2 abovePlatform,belowPlatform;
-        private PropState Target(WorldState world)=>world==null?null:ContainerScenario?world.containers.Single(c=>c.id==ContainerState.PrototypeId):world.props.Single();
+        private const string TargetPropId="prop:crate-1";
+        private PropState Target(WorldState world)=>FindTarget(world,ContainerScenario);
+        // The fixture owns this ID; level content may add any number of other bodies.
+        public static PropState FindTarget(WorldState world,bool container)=>world==null?null:container?
+            world.containers.SingleOrDefault(c=>c.id==ContainerState.PrototypeId):world.props.SingleOrDefault(p=>p.id==TargetPropId);
         public void Initialize(PrototypeRuntime value)
         {
             runtime=value;deadline=Time.unscaledTime+40;value.CommandSource=Command;
@@ -62,6 +66,7 @@ namespace Remains.Runtime
                 return;
             }
             var prop=Target(session.ServerWorld);
+            if(prop==null) {Finish(false,"В тестовом мире отсутствует явный объект телекинеза: "+(ContainerScenario?ContainerState.PrototypeId:TargetPropId));return;}
             if(ContainerScenario && initialItems==null) initialItems=Remains.Serialization.StateJson.ToJson(((ContainerState)prop).items);
             if(pauseRunning) return;
             if(PauseScenario && phase==2 && !pauseStarted && prop.held && prop.y>1)
