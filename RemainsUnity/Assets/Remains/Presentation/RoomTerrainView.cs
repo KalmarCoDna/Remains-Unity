@@ -56,12 +56,12 @@ namespace Remains.Presentation
                     if(solid!=null) builder.Material(solid,x,y,q=>shapes.Front(x,y,q),height);
                     var platform=builder.Definition(RoomLayers.Platform,x,y);
                     if(platform!=null) builder.Material(platform,x,y,q=>shapes.Front(x,y,q),height);
-                    foreach(string layer in new[]{RoomLayers.Ladder,RoomLayers.Stairs})
-                    {
-                        var definition=builder.Definition(layer,x,y);
-                        if(definition?.FrontSprite!=null) builder.Sprite(definition,x,y);
-                    }
+                    var ladder=builder.Definition(RoomLayers.Ladder,x,y);
+                    if(ladder?.FrontSprite!=null) builder.Sprite(ladder,x,y);
+                    var stairs=builder.Definition(RoomLayers.Stairs,x,y);
+                    if(stairs?.FrontSprite!=null) builder.Sprite(stairs,x,y);
                 }
+            builder.PublishTiles();
             return root;
         }
 
@@ -96,6 +96,7 @@ namespace Remains.Presentation
             private readonly Texture2D edges;
             private readonly float litEdge;
             private readonly Dictionary<string,Tilemap> maps=new(StringComparer.Ordinal);
+            private readonly Dictionary<Tilemap,Dictionary<Vector3Int,TileChangeData>> tiles=new();
 
             public Builder(RoomFile room,RoomDefinitionCatalog definitions,RoomTileArtAsset art,Shader shader,Transform root,RoomMeshLifetime lifetime,float quarter,Vector2 origin,Texture2D edges,float litEdge)
             {this.room=room;this.definitions=definitions;this.art=art;this.shader=shader;this.root=root;this.lifetime=lifetime;this.quarter=quarter;this.origin=origin;this.edges=edges;this.litEdge=litEdge;}
@@ -206,9 +207,20 @@ namespace Remains.Presentation
             private void Place(Tilemap map,Tile tile,Vector3Int cell,Vector2 registration,Vector2 scale)
             {
                 var cellOrigin=new Vector2(cell.x*quarter,cell.y*quarter);
-                map.SetTile(cell,tile);
-                map.SetTileFlags(cell,TileFlags.None);
-                map.SetTransformMatrix(cell,Matrix4x4.TRS(registration-cellOrigin,Quaternion.identity,new Vector3(scale.x,scale.y,1)));
+                // If two terrain layers target the same map cell, the later write wins.
+                tiles[map][cell]=new TileChangeData(cell,tile,tile.color,
+                    Matrix4x4.TRS(registration-cellOrigin,Quaternion.identity,new Vector3(scale.x,scale.y,1)));
+            }
+            public void PublishTiles()
+            {
+                foreach(var pair in tiles)
+                {
+                    var changes=new TileChangeData[pair.Value.Count];
+                    pair.Value.Values.CopyTo(changes,0);
+                    pair.Key.SetTiles(changes,true);
+                    foreach(var change in changes)
+                        if(((Tile)change.tile).flags!=TileFlags.None)pair.Key.SetTileFlags(change.position,TileFlags.None);
+                }
             }
 
             public void Sprite(RoomDefinition definition,int x,int y)
@@ -271,6 +283,7 @@ namespace Remains.Presentation
                 renderer.mode=TilemapRenderer.Mode.Chunk;
                 renderer.sharedMaterial=TerrainMaterial(textureId,wall);
                 maps.Add(key,map);
+                tiles.Add(map,new Dictionary<Vector3Int,TileChangeData>());
                 return map;
             }
         }
