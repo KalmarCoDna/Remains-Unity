@@ -53,6 +53,24 @@ Unity -batchmode -quit -force-glcore -job-worker-count 2 \
 Building a Windows Player on Linux does not establish Windows/D3D11 execution or
 two-computer LAN acceptance. Native graphical paired checks use Linux Players.
 
+The same Unity source (documentation tip `df01532a02`) also built Linux x86-64
+Mono Release successfully, exit 0, BuildReport **2,166,308,507 bytes**. Later tool
+packaging and documentation commits do not change the Player source.
+
+## Ready static site
+
+The standalone room editor is packaged as `remains-room-editor-20261107.zip`
+(60,039,547 bytes), source `a9b9365bc13ee64ca20bca8ebd742695b711aa8e`.
+SHA256: `99c1e2813d89a2d6688338cd989fa4f42d27ce86ee90a709218c541c8639c2b7`.
+Its README explains serving the ready `site/` directory without Unity or an SDK.
+No site has been deployed.
+
+An actual Unity shader probe rendered four 32x32 float targets using the game's
+WorldTerrain/WorldSprite shaders: maximum analytic RGB error 0.000543, alpha error
+0, tolerance 0.003. Both browser renderers matched those sampled colors within two
+sRGB byte values. This covers terrain/sprite rendering, not the missing original
+light reference. Browser edit, map, IndexedDB and maximum-size room checks passed.
+
 ## Branch boundaries
 
 - `feat/td33-host-single-world` retains the remote validation path and explicit
