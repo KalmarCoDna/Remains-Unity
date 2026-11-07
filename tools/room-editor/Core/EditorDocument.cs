@@ -178,6 +178,11 @@ public sealed class EditorDocument
         });
     }
     public void SetConnectors(string text) => Change(r => r.Connectors = string.IsNullOrWhiteSpace(text) ? Array.Empty<int>() : text.Split(',').Select(v => int.Parse(v.Trim())).ToArray());
+    public void SetOptions(string text)=>Change(r=>
+    {
+        var value=JsonText.Parse(text,"options");if(value.Kind!=JsonKind.Object)throw new FormatException("Настройки должны быть JSON-объектом строк.");
+        r.Options.Clear();foreach(var field in value.Fields)r.Options.Add(field.Key,field.Value.AsString("options."+field.Key));
+    });
     public void SetTemplate(string template) => Change(r => r.Template = template);
     public string AddEntity(string layer, string type, int x, int y)
     {
