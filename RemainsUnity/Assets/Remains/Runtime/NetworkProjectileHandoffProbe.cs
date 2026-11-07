@@ -21,6 +21,8 @@ namespace Remains.Runtime
         private bool finishSent,closing;
         private string flightId;
         private float deadline,reconnectAt,finishTime,retained,expectedDistance,finishedDistance;
+        private float readySince;
+        private int steadyFrames;
         private Vector2 shotOrigin,shotEnd;
         private int launches,generation;
         private bool Host=>runtime.Options.Role=="host";
@@ -53,6 +55,10 @@ namespace Remains.Runtime
             var session=runtime.Session;var actor=session.LocalActor;
             if(Host || fired || actor?.level!="factory:0" || session.World.actors.Count(a=>a.player && a.connected && a.level==actor.level)!=2) return default;
             if(actor.weapon!="pistol") return new PlayerCommand {weapon="pistol"};
+            // Deferred asset unloading after entry can advance an entire short flight in a single frame.
+            if(readySince==0) readySince=Time.unscaledTime;
+            steadyFrames=Time.unscaledDeltaTime<=1f/30?steadyFrames+1:0;
+            if(Time.unscaledTime-readySince<2 || steadyFrames<12) return default;
             var aim=FindAim(actor,out float free);
             if(free<MinimumFreeFlight)
             {
@@ -113,6 +119,8 @@ namespace Remains.Runtime
             if(!Host)
             {
                 var flight=session.World.projectiles.Find(p=>p.launch.id==flightId);
+                if(!disconnected && flight is {finished:true})
+                {Finish(false,$"Клиент не получил промежуточный прогресс до конца полёта: {flight.traveled:F2} м.");return;}
                 if(!disconnected && flight is {finished:false} && flight.traveled>2)
                 {
                     retained=flight.traveled;generation=flight.generation;
@@ -122,7 +130,11 @@ namespace Remains.Runtime
             }
             var canonical=session.ServerWorld.projectiles.Find(p=>p.launch.id==flightId);
             if(canonical==null) return;
-            if(canonical.generation==1) {retained=Mathf.Max(retained,canonical.traveled);generation=canonical.generation;}
+            if(canonical.generation==1)
+            {
+                if(canonical.finished) {Finish(false,$"Снаряд завершился у исходного владельца: {canonical.traveled:F2} м.");return;}
+                retained=Mathf.Max(retained,canonical.traveled);generation=canonical.generation;
+            }
             else if(!transferred)
             {
                 if(canonical.finished || canonical.owner!=session.LocalOwner || canonical.traveled<retained || retained<=0)
