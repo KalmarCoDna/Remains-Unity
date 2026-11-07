@@ -86,7 +86,7 @@ namespace Remains.Presentation
         // nothing never gets one and does not hold the selection back).
         public bool ActorShadowFieldsReady(IReadOnlyList<ActorShadowSource> sources)
         {
-            if(!IsReady) return false;
+            if(!IsReady || levelLight==null) return false;
             for(int i=0;i<sources.Count;i++) if(!levelLight.Direct.ReadyOrNone(sources[i].Id)) return false;
             return true;
         }
@@ -94,7 +94,7 @@ namespace Remains.Presentation
         // The direct fields actor shadows need now: kept in the cache, missing ones built a few per frame.
         public void PrepareActorShadowFields(IReadOnlyCollection<string> ids)
         {
-            if(!IsReady) return;
+            if(!IsReady || levelLight==null) return;
             levelLight.Direct.Request(ids);
             StartLightWork();
         }

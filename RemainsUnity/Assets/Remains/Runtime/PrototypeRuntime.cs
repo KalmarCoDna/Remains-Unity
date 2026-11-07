@@ -123,6 +123,12 @@ namespace Remains.Runtime
         private void Initialize()
         {
             Options=LaunchOptions.Parse();
+            if(Options.Smoke=="pony-render-validation")
+            {
+                enabled=false;
+                PonyRenderValidationProbe.Run(Options.Report);
+                return;
+            }
             if(Options.Smoke=="catalog-lifetime")
             {
                 enabled=false;
