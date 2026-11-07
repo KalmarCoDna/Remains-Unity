@@ -38,6 +38,9 @@ namespace Remains.Editor
             try
             {
                 root=new GameObject("Проверка освобождения масок");var view=root.AddComponent<ActorCastShadowView>();
+                // This batch check runs in Edit Mode; opt this fixture into Unity callbacks,
+                // otherwise DestroyImmediate skips OnDestroy on the runtime-only behaviour.
+                view.runInEditMode=true;
                 var flags=BindingFlags.Instance|BindingFlags.NonPublic;
                 object slot=typeof(ActorCastShadowView).GetMethod("GetSlot",flags).Invoke(view,new object[]{0});
                 projection=(RenderTexture)slot.GetType().GetField("mask").GetValue(slot);
