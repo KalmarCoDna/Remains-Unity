@@ -152,6 +152,7 @@ namespace Remains.Runtime
             // Mirror configures headless frame rate during StartClient/StartHost.
             // Apply the requested probe limit after that, including reconnections.
             if(Options.Smoke!=null) Session.ClientReady+=()=>Application.targetFrameRate=Options.ProbeFrameRate;
+            Session.ConfigureHostSelfTicks(Options.HostSelfTicks);
             Session.ConfigureRules(WeaponCatalog.Rules);
             Session.UseLobby=Options.Smoke==null || Options.Smoke.StartsWith("lobby") || Options.Smoke.StartsWith("duplicate-lobby") || Options.Smoke.StartsWith("protocol") || Options.Smoke.StartsWith("grenade-resume-"); Session.autoCreatePlayer=false; Session.maxConnections=Options.Capacity;
             Session.CharacterId=Options.Character;
@@ -531,6 +532,7 @@ namespace Remains.Runtime
                 if(visual is AtlasActorVisual atlas) atlas.ConfigureVisibleArea(actorActivity.InVisibleArea);
             }
             if(visual is PonyVisual pony) pony.ConfigureMagicSource(ponyMagic);
+            visual.ConfigurePresentationProjection(Session.SharedHostWorld?remoteMotion.Presentation:null);
             visual.Bind(actor);visual.SetVisible(true);
         }
         private void BindEntryPresentation(IRoomLighting lighting,RoomLayout room,bool pending)
@@ -601,12 +603,12 @@ namespace Remains.Runtime
             if(actor.level!=hitchLevel || Session.World.props.Count!=hitchProps)
             {
                 hitchLevel=actor.level;hitchProps=Session.World.props.Count;
-                Remains.Diagnostics.FrameHitchLog.Context=$"уровень {actor.level}, игроков {Session.World.actors.FindAll(a=>a.player && a.connected).Count}, тел {hitchProps}, контейнеров {Session.World.containers.Count}";
+                Remains.Diagnostics.FrameHitchLog.Context=$"{(Session.SharedHostWorld?"хост, один мир":NetworkServer.active?"хост, самоотправка":"клиент")}; уровень {actor.level}, игроков {Session.World.actors.FindAll(a=>a.player && a.connected).Count}, тел {hitchProps}, контейнеров {Session.World.containers.Count}";
             }
             // Tops of physical bodies as actor supports, current before any actor moves this frame.
             using(Remains.Diagnostics.FrameHitchLog.Section("Опоры на телах"))
                 foreach(string level in Geometry.LoadedLevels) BodyTopSurfaces.Update(Geometry.Get(level),Session.World,level);
-            using(Remains.Diagnostics.FrameHitchLog.Section("Удалённое движение")) remoteMotion.Step(Session.World,Session.LocalOwner,Time.deltaTime,Session.Pause.IsPaused,Time.unscaledTimeAsDouble,true);
+            using(Remains.Diagnostics.FrameHitchLog.Section("Удалённое движение")) remoteMotion.Step(Session.World,Session.LocalOwner,Time.deltaTime,Session.Pause.IsPaused,Time.unscaledTimeAsDouble,true,Session.SharedHostWorld);
             using(Remains.Diagnostics.FrameHitchLog.Section("Актёры: активность"))
             {actorActivity.Refresh(Session.World);
             actorActivity.SetVisibleArea(actor.level,cameraFollower.AnimationArea(actor));}
@@ -622,7 +624,7 @@ namespace Remains.Runtime
             foreach(var animated in Session.World.actors)
             {
                 if(animated.owner==Session.LocalOwner) animated.poseCorrectionRemaining=0;
-                if(actorActivity.Active(animated) && !Session.Pause.IsPaused(animated.level) &&
+                if((!Session.SharedHostWorld || animated.owner==Session.LocalOwner) && actorActivity.Active(animated) && !Session.Pause.IsPaused(animated.level) &&
                     !remoteMotion.ControlsPosePhase(animated))
                 {
                     if(animated.owner==Session.LocalOwner) actorActivity.ObserveSimulation(animated);
