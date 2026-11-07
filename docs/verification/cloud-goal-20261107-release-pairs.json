@@ -1,0 +1,58 @@
+{
+  "source_revision": "df01532a02a67aeb58387978dc2d4d1800d7803e",
+  "same_unity_source_as": "dcc91aa16a7ce9261bab98b9e57366cab77fb930",
+  "assembly_sha256": "374afe08176db8f5e474d89cdf105782c55139ddf5c2ea17812eda02f5e0e411",
+  "target": "Linux x86-64 Mono Release",
+  "paired_passes": 5,
+  "successful_endpoints": 10,
+  "runs": [
+    {
+      "mode": "off",
+      "observed_mode": "off",
+      "scenario": "appearance",
+      "success": true,
+      "endpoint_count": 2,
+      "raw_summary": "cloud-goal-release-modes/summary.json",
+      "requested_resolution": "1280x720"
+    },
+    {
+      "mode": "on",
+      "observed_mode": "on",
+      "scenario": "appearance",
+      "success": true,
+      "endpoint_count": 2,
+      "raw_summary": "cloud-goal-release-modes/summary.json",
+      "requested_resolution": "1280x720"
+    },
+    {
+      "mode": "default",
+      "observed_mode": "off",
+      "scenario": "door",
+      "success": true,
+      "endpoint_count": 2,
+      "raw_summary": "cloud-goal-release-default/summary.json",
+      "requested_resolution": "1280x720"
+    },
+    {
+      "mode": "off",
+      "observed_mode": "off",
+      "scenario": "grenade",
+      "success": true,
+      "endpoint_count": 2,
+      "raw_summary": "cloud-goal-release-grenade-640/summary.json",
+      "requested_resolution": "640x360"
+    },
+    {
+      "mode": "on",
+      "observed_mode": "on",
+      "scenario": "grenade",
+      "success": true,
+      "endpoint_count": 2,
+      "raw_summary": "cloud-goal-release-grenade-640/summary.json",
+      "requested_resolution": "640x360"
+    }
+  ],
+  "initial_grenade_1280_failures_preserved": true,
+  "initial_failure": "phase0 low-frame-rate stance controller, no grenade thrown; same binary/all assertions passed at640x360",
+  "utc": "2026-11-07T17:47:56.664168+00:00"
+}

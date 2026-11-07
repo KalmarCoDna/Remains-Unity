@@ -57,6 +57,24 @@ The same Unity source (documentation tip `df01532a02`) also built Linux x86-64
 Mono Release successfully, exit 0, BuildReport **2,166,308,507 bytes**. Later tool
 packaging and documentation commits do not change the Player source.
 
+That exact Release assembly completed **five paired smoke cases / ten successful
+endpoint reports with exit 0**: appearance OFF/ON, ordinary grenade OFF/ON and
+door with no mode argument (observed shared/OFF). Appearance and door used normal
+windows requested at 1280x720; grenades passed at 640x360. The original 1280 grenade
+runs are preserved failures at phase 0, before throwing: the proportional test
+stance driver does not settle at low frame rates. All original grenade handoff,
+damage, item and deduplication assertions passed on the same binary at 640x360.
+`cloud-goal-20261107-release-pairs.json` records the exact assembly and raw reports.
+
+The additional `test/frame-rate-safe-grenade-probe` branch replaces only that
+diagnostic stance command with the already shared dt-aware probe helper. It is
+kept separate from these frozen Player artifacts. A real Unity MovementController
+regression reproduced the old 3 Hz failure throughout 45 simulated seconds, then
+passed all 16 fixed cases (eight frame rates, both sides) with the original
+0.05 position / 0.15 velocity / 0.05 support-height tolerances. Actual authored
+grenade range is 6, giving target x=22 from thrower x=17. Whole-file Unity API
+compilation also passed. Production movement and damage were unchanged.
+
 ## Ready static site
 
 The standalone room editor is packaged as `remains-room-editor-20261107.zip`
@@ -93,6 +111,32 @@ light reference. Browser edit, map, IndexedDB and maximum-size room checks passe
 - Audit-only branches for texture memory, content/save contracts, factory content
   and `compp` preserve their own evidence and blockers; they do not add invented
   progression, item pools or private fixtures to gameplay.
+
+## Separate TD16 paired acceptance
+
+The separate protocol-100 TD16 integration completed four genuine Linux Release
+pairs (release/expire in each host mode), eight successful endpoint reports and
+exit codes 0. Tested source `7616938e7`, assembly SHA256
+`94ed34eeb1487e94ad04b3afd574d71b2e639c701794c28060a65d075d9ffe3a`;
+report-only tip `45c6fcdaf` on `fix/td16-probe-held-observation`.
+Both peers observed generation 1 and held generation 2; release produced generation
+3/blast 3, held expiry blast 2, each with one blast/visual/receipt and inventory 4/5.
+The earlier two failed observations remain recorded. The repaired probe waits for
+actual live peer observations, retains the original travel/fuse/count assertions,
+and adds a generation-1 requirement on both peers. Actual fuse remains 2.5 seconds.
+Software graphics used 640x360; the source and raw evidence are in that branch's
+`Tests/HostWorld/TD16-INTEGRATION.md` and `TD16-NATIVE-RESULTS.json`.
+
+## Bounded TD33 performance measurement
+
+TD33 also completed a separate paired seed104 combat measurement from a native
+Player-generated immutable input, source `823d6ea3d`, 300 warm-up frames and 180
+sample frames. Both guests were admitted before capture. Host-local WorldTick
+calls were 69 with self ticks and 0 with the shared graph. The report at
+`RemainsUnity/Tests/HostWorld/acceptance-2026-11-07.md` preserves the exact input,
+assembly, CPU section scopes, raw paths and limits. Software-rendered wall-frame
+p95 did not improve in that sample; total memory reduction was not established.
+Allocation counters were unavailable. No hardware FPS improvement is claimed.
 
 ## Remaining external evidence and design work
 
