@@ -358,7 +358,12 @@ namespace Remains.Presentation
         public void Focus(Vector2 world)
         {
             if(root==null) throw new InvalidOperationException("Вид уровня не подготовлен.");
-            if(noGraphics) return;
+            if(noGraphics)
+            {
+                var visible=WindowFor(world);
+                if(visible!=windowRooms) {windowRooms=visible;ShowWindowRooms();}
+                return;
+            }
             bool first=levelLight==null;
             if(first)
             {
