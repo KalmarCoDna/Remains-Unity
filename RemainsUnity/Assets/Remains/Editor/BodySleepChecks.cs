@@ -103,6 +103,10 @@ namespace Remains.Editor
             var notify=typeof(FreePropMotionContext).GetMethod("ExternalMotion",
                 System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic);
             Require(notify!=null,"Не найден вход изменения сетевой позы.");
+            var invalidate=typeof(FreePropMotionContext).GetMethod("InvalidateSupport",
+                System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic);
+            Require(invalidate!=null,"Не найден вход изменения состава тел.");
+            invalidate.Invoke(context,null);
             var previous=lower.Position;lower.x=11;
             notify.Invoke(context,new object[]{lower,previous});
             FreePropMotion.Step(world,"local",1f/60,_=>room,_=>false,null,null,context);

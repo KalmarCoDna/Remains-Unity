@@ -179,7 +179,7 @@ namespace Remains.Gameplay
         internal void InvalidateSupport()=>supportDirty=true;
         internal void ExternalMotion(PropState prop,Vector2 previous)
         {
-            if(!trackSupport || supportDirty || !ReferenceEquals(Support.Find(prop.id),prop)) return;
+            if(!trackSupport || !ReferenceEquals(Support.Find(prop.id),prop)) return;
             Support.Moved(prop,previous.x);
             if(rest.TryGetValue(prop,out var state) && state.asleep && Disturbed(prop,state)) Wake(prop,state);
             WakeAbove(prop,Mathf.Min(previous.y,prop.y),previous.x);
