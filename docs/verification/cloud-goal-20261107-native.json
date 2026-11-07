@@ -1,0 +1,140 @@
+{
+    "revision": "dcc91aa16a7ce9261bab98b9e57366cab77fb930",
+    "utc": "2026-11-07T16:32:49.5206360Z",
+    "version": "6000.0.39f1",
+    "renderer": "llvmpipe (LLVM 19.1.7, 256 bits)",
+    "cases": [
+        {
+            "name": "weapon grip and GPU capture",
+            "status": "PASS",
+            "detail": "",
+            "milliseconds": 2790
+        },
+        {
+            "name": "animation fallback buffer",
+            "status": "PASS",
+            "detail": "",
+            "milliseconds": 1
+        },
+        {
+            "name": "shadow mask teardown",
+            "status": "PASS",
+            "detail": "",
+            "milliseconds": 7
+        },
+        {
+            "name": "Mirror diagnostics reconnect",
+            "status": "PASS",
+            "detail": "",
+            "milliseconds": 27
+        },
+        {
+            "name": "firearm content",
+            "status": "PASS",
+            "detail": "",
+            "milliseconds": 11634
+        },
+        {
+            "name": "ladder entry",
+            "status": "PASS",
+            "detail": "",
+            "milliseconds": 5326
+        },
+        {
+            "name": "foot declaration",
+            "status": "PASS",
+            "detail": "",
+            "milliseconds": 182
+        },
+        {
+            "name": "jump pose",
+            "status": "PASS",
+            "detail": "",
+            "milliseconds": 10
+        },
+        {
+            "name": "standing edge",
+            "status": "PASS",
+            "detail": "",
+            "milliseconds": 186
+        },
+        {
+            "name": "standing support",
+            "status": "PASS",
+            "detail": "",
+            "milliseconds": 126
+        },
+        {
+            "name": "factory loot",
+            "status": "PASS",
+            "detail": "",
+            "milliseconds": 4085
+        },
+        {
+            "name": "factory encounters and danger",
+            "status": "PASS",
+            "detail": "",
+            "milliseconds": 4843
+        },
+        {
+            "name": "grate projectile",
+            "status": "PASS",
+            "detail": "",
+            "milliseconds": 969
+        },
+        {
+            "name": "horizontal motion",
+            "status": "PASS",
+            "detail": "",
+            "milliseconds": 24
+        },
+        {
+            "name": "variable jump",
+            "status": "PASS",
+            "detail": "",
+            "milliseconds": 4
+        },
+        {
+            "name": "platform drop",
+            "status": "PASS",
+            "detail": "",
+            "milliseconds": 256
+        },
+        {
+            "name": "host shared graph and authority",
+            "status": "PASS",
+            "detail": "",
+            "milliseconds": 515
+        },
+        {
+            "name": "shared ladder controller",
+            "status": "PASS",
+            "detail": "",
+            "milliseconds": 0
+        },
+        {
+            "name": "empty room layer geometry",
+            "status": "PASS",
+            "detail": "",
+            "milliseconds": 3
+        },
+        {
+            "name": "DSP preset menu and persistence",
+            "status": "PASS",
+            "detail": "",
+            "milliseconds": 58
+        },
+        {
+            "name": "DSP loop playback recovery",
+            "status": "PASS",
+            "detail": "",
+            "milliseconds": 4
+        },
+        {
+            "name": "held prop release and landing",
+            "status": "PASS",
+            "detail": "",
+            "milliseconds": 22
+        }
+    ]
+}

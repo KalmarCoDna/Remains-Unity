@@ -1,0 +1,28 @@
+{
+  "revision": "dcc91aa16a7ce9261bab98b9e57366cab77fb930",
+  "unity": "6000.0.39f1",
+  "target": "StandaloneWindows64",
+  "backend": "Mono",
+  "configuration": "Release",
+  "build_exit_code": 0,
+  "build_report_bytes": 2169280911,
+  "built_at_utc": "2026-11-07T16:42:34.666337+00:00",
+  "windows_runtime_tested": false,
+  "files": [
+    {
+      "path": "Remains.exe",
+      "bytes": 672256,
+      "sha256": "7a35f1a6849e9fead797187678c54777511d3a527d263347023854fd475158a2"
+    },
+    {
+      "path": "Remains_Data/Managed/Assembly-CSharp.dll",
+      "bytes": 4028416,
+      "sha256": "a17478598d4d9859d0197c703201674070786cdd92e35c63dcd3878fd04ae50e"
+    },
+    {
+      "path": "UnityPlayer.dll",
+      "bytes": 33615032,
+      "sha256": "74b44ccd7599c31644b88d07a6d9d1d995fdef36155dacc6a43b4a104d1057bc"
+    }
+  ]
+}
