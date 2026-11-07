@@ -36,4 +36,29 @@ All four host reports passed. Every participant recorded one blast, one visual, 
 
 The separate dependent branch `fix/td16-probe-held-observation` corrects this probe ordering. After entry/presentation readiness and a bounded one-second quiet period before any grenade exists, the client confirms its live generation1 observation before capture. The host holds the actual grenade at its captured position until the client confirms seeing generation2, then moves it with the existing player telekinesis command. Release waits for the client's own live held travel>1m and fuse advance>0.4s. Only phase integers are exchanged; each endpoint records and validates its own canonical state. Both participants must now observe original generation1. The original60s deadline, real fuse, time scale, gameplay handlers, protocol100 and all original thresholds/counts remain unchanged.
 
-Native repeat of the fixed probe is pending. For software GL the repeat may use an explicitly recorded640×360 copied runner; this probe has no pixel-size/screenshot assertion. Lower resolution changes rendering workload while retaining actual world/VFX simulation and every state assertion.
+## Fixed native acceptance
+
+The fixed probe at `7616938e76bf92ef01574427aaba2c6940d82da8` built successfully from clean source and passed all four genuine Linux Release pairs on 2026-11-07. Managed assembly SHA256: `94ed34eeb1487e94ad04b3afd574d71b2e639c701794c28060a65d075d9ffe3a`.
+
+| Host self-ticks | Scenario | Result | Client held travel | Client held fuse advance |
+| --- | --- | --- | --- | --- |
+| off | release | PASS | 4.016m | 0.625s |
+| off | expire while held | PASS | 4.090m | 2.183s |
+| on | release | PASS | 3.974m | 0.650s |
+| on | expire while held | PASS | 3.995m | 2.358s |
+
+All eight processes reported success and exited0. Strict post-evaluation confirmed observed host modes, eight distinct save directories, both participants' original generation1 and held generation2, every live acknowledgement, detached flight objects, stale replay/pose checks, release/blast generations3 or expiration generation2, all original movement/fuse/count assertions and inventory4/5. No exception markers were found in their logs. Initial and final results are recorded separately in [TD16-NATIVE-RESULTS.json](TD16-NATIVE-RESULTS.json).
+
+The fixed run used real graphical GLCore/Mesa llvmpipe windows at640×360. The corrected runner copy changed exactly the default1280×720 dimensions; SHA256 `afb1905860241db59e09f4527dee634a7c09f490068293ccfa9bb33de2816ce8`. This probe has no pixel-size/screenshot assertion. Rendering workload was reduced while actual world/VFX simulation and all state assertions remained active. Windows pairs, physical-GPU appearance and audible behavior were not measured by these Linux checks.
+
+To reproduce the exact software-GL runner from its ancestor source:
+
+```sh
+git show fb01263e855332828434a2e38b36ed1536c550b9:RemainsUnity/Tests/HostWorld/verify.py > /tmp/td16-verify.py
+python3 - <<'PY'
+from pathlib import Path
+p=Path('/tmp/td16-verify.py')
+p.write_text(p.read_text().replace('else (1280,720)','else (640,360)'))
+PY
+python3 /tmp/td16-verify.py --player /path/to/Remains --output /path/to/new-results --modes off on --scenarios grenade-telekinesis grenade-telekinesis-expire --windowed --timeout 150 --port 21700
+```
