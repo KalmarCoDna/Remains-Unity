@@ -142,10 +142,11 @@ namespace Remains.Content
             SystemInfo.graphicsDeviceType==UnityEngine.Rendering.GraphicsDeviceType.Null && material.shader.FindPropertyIndex(property)>=0;
         private static string PartProblem(PonyRenderPart part)=>part==null?"part-null":
             part.mesh==null?"mesh-null":!part.mesh.isReadable?"mesh-unreadable":
-            part.material==null?"material-null":part.material.mainTexture==null?"texture-null":
+            part.material==null?"material-null":
             part.material.shader==null?"shader-null":!HasShaderProperty(part.material,"_MainTex")?
                 $"shader-main-texture ({part.material.shader.name}, properties={part.material.shader.GetPropertyCount()})":
             !HasShaderProperty(part.material,"_Color")?"shader-color":!HasShaderProperty(part.material,"_Emission")?"shader-emission":
+            part.material.mainTexture==null?"texture-null":
             part.points==null?"points-null":part.points.Length!=4?"points-count":
             string.IsNullOrEmpty(part.sourcePath)?"source-path-empty":string.IsNullOrEmpty(part.symbolId)?"symbol-id-empty":null;
         public static void ValidateBounds(Bounds actual,Bounds expected,string context)

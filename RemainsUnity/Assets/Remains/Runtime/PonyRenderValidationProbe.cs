@@ -20,7 +20,7 @@ namespace Remains.Runtime
                 var part=asset.Clips[0].frames[0].parts[0];
                 var points=part.points;var original=part.material;
                 var shader=GameAssets.Load<Shader>("Presentation/WorldTerrain")??throw new InvalidOperationException("Нет шейдера для отрицательной проверки.");
-                var wrongMaterial=new Material(shader) {mainTexture=original.mainTexture};
+                var wrongMaterial=new Material(shader);
                 try
                 {
                     part.points=new Vector3[3];
