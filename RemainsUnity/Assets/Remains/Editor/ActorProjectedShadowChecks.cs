@@ -92,14 +92,16 @@ namespace Remains.Editor
             var fromLight=start+new Vector2(-2,2*wood.height+ammo.height+.4f);
             level.SetViewArea(new Rect(start-new Vector2(4,1),new Vector2(8,6)));
             var bodies=new PropView[stack.Length];
+            var states=new PropState[stack.Length];
             for(int i=0;i<bodies.Length;i++)
             {
                 var (definition,offset)=stack[i];string id="stack-"+i;
                 Vector2 position=start+offset;
                 var view=artwork.CreateView(definition.id,id,definition.width);
                 view.transform.SetParent(visuals.transform);
-                view.DrawMotion(new PropState{id=id,definition=definition.id,level=layout.id,x=position.x,y=position.y,
-                    width=definition.width,height=definition.height},"local",false,0);
+                var state=new PropState{id=id,definition=definition.id,level=layout.id,x=position.x,y=position.y,
+                    width=definition.width,height=definition.height};
+                states[i]=state;view.DrawMotion(state,"local",false,0);
                 var field=typeof(InteractionVisuals).GetField(i==2?"containers":"props",BindingFlags.Instance|BindingFlags.NonPublic);
                 ((Dictionary<string,PropView>)field.GetValue(visuals)).Add(id,view);bodies[i]=view;
             }
@@ -121,6 +123,10 @@ namespace Remains.Editor
             presentation.Present(level,actors,visuals,emissions,ids);presentation.CollectProjectedLightShadows(masks);
             if(!masks.Select(mask=>mask.Revision).SequenceEqual(original.Select(mask=>mask.Revision)))
                 throw new InvalidOperationException("Неподвижная стопка перестроила маски.");
+            states[1].x+=.4f;bodies[1].DrawMotion(states[1],"local",false,0);
+            presentation.Present(level,actors,visuals,emissions,ids);presentation.CollectProjectedLightShadows(masks);
+            if(masks.Count!=3 || masks[1].WorldBounds.center.x<=original[1].WorldBounds.center.x+.3f || masks[1].Revision<=original[1].Revision)
+                throw new InvalidOperationException("Проекция осталась на старом месте после движения ящика.");
             bodies[2].SetVisible(false);
             presentation.Present(level,actors,visuals,emissions,ids);presentation.CollectProjectedLightShadows(masks);
             if(masks.Count!=2 || masks.Any(mask=>mask.Mask==original[2].Mask))

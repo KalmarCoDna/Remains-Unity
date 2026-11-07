@@ -73,16 +73,17 @@ namespace Remains.Presentation
             {
                 foreach(var pair in views)
                 {
-                    var renderer=pair.Value.Artwork;
-                    if(renderer==null || !renderer.enabled || renderer.forceRenderingOff || !renderer.gameObject.activeInHierarchy ||
-                        renderer.sprite==null || renderer.color.a<=0) continue;
-                    var bounds=renderer.bounds;
+                    var view=pair.Value;var bounds=view.ShadowBounds;
                     float margin=maxOffset+Mathf.Max(bounds.extents.x,bounds.extents.y)*(maxScale-1);
                     if(!area.Overlaps(Rect.MinMaxRect(bounds.min.x-margin,bounds.min.y-margin,bounds.max.x+margin,bounds.max.y+margin)))continue;
+                    var renderer=view.Artwork;
+                    if(!renderer.enabled || renderer.forceRenderingOff || !renderer.gameObject.activeInHierarchy)continue;
+                    var sprite=renderer.sprite;float opacity=renderer.color.a;
+                    if(sprite==null || opacity<=0)continue;
                     var matrix=renderer.localToWorldMatrix;
                     if(renderer.flipX || renderer.flipY)
                         matrix*=Matrix4x4.Scale(new Vector3(renderer.flipX?-1:1,renderer.flipY?-1:1,1));
-                    output.Add((kind,pair.Key,bounds.center,new LightOccluder(renderer.sprite,matrix,renderer.color.a)));
+                    output.Add((kind,pair.Key,bounds.center,new LightOccluder(sprite,matrix,opacity)));
                 }
             }
         }
