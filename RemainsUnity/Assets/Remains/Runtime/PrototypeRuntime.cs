@@ -644,7 +644,7 @@ namespace Remains.Runtime
             using(Remains.Diagnostics.FrameHitchLog.Section("Шипы")) spikes.Step();
             using(Remains.Diagnostics.FrameHitchLog.Section("Огонь")) Fires.Step();
             using(Remains.Diagnostics.FrameHitchLog.Section("Радиация")) radiation.Step(Time.deltaTime);
-            using(Remains.Diagnostics.FrameHitchLog.Section("Физические тела")) freeProps.Step(Time.deltaTime);
+            using(Remains.Diagnostics.FrameHitchLog.Section("Физические тела")) freeProps.Step(Time.deltaTime,actorActivity.Connected.Players);
             using(Remains.Diagnostics.FrameHitchLog.Section("Бой")) Combat.Step(Time.deltaTime);
             if (poseCadence.TryAdvance(Time.unscaledTimeAsDouble))
             using(Remains.Diagnostics.FrameHitchLog.Section("Актёры: публикация поз"))

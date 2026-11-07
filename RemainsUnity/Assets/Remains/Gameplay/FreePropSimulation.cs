@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Remains.Domain;
 using Remains.Networking;
 using UnityEngine;
@@ -21,7 +22,7 @@ namespace Remains.Gameplay
         private readonly Action<PropState,Vector2> notifyMotion;
         private readonly Action<PropState> retainFinalPose;
         private readonly Action<string> publishDue;
-        private readonly System.Collections.Generic.HashSet<string> finalPoses=new(StringComparer.Ordinal);
+        private readonly HashSet<string> finalPoses=new(StringComparer.Ordinal);
         private double publishTime;
         private string poseWorld;
         private string poseOwner;
@@ -50,7 +51,7 @@ namespace Remains.Gameplay
                     if(ReferenceEquals(geometry.Find(level),room)) motion.WakeLevel(level);
             };
         }
-        public void Step(float delta)
+        public void Step(float delta,IReadOnlyList<ActorState> connectedPlayers=null)
         {
             // No simulation owner exists before welcome or after client shutdown.
             if(session.World==null || string.IsNullOrEmpty(session.LocalOwner)) return;
@@ -60,9 +61,10 @@ namespace Remains.Gameplay
             publishTime=Time.unscaledTimeAsDouble;
             bool publish=cadence.TryAdvance(publishTime);
             FreePropMotion.Step(session.World,session.LocalOwner,delta,roomForLevel,isPaused,
-                publish?publishChanged:null,passengers,motion,notifyMotion,retainFinalPose);
+                publish?publishChanged:null,passengers,motion,notifyMotion,retainFinalPose,connectedPlayers);
             if(publish)
             {
+                using var section=Remains.Diagnostics.FrameHitchLog.Section("Тела: повторы поз");
                 foreach(string id in finalPoses) PublishCurrentPose(id);
                 finalPoses.Clear();
                 poses.PublishDue(publishTime,publishDue);

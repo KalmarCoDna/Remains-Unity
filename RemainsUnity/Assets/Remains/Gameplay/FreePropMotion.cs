@@ -13,7 +13,7 @@ namespace Remains.Gameplay
             =>Step(world,localOwner,dt,roomForLevel,isPaused,publish,passengers,new FreePropMotionContext());
         public static int Step(WorldState world,string localOwner,float dt,Func<string,RoomLayout> roomForLevel,
             Func<string,bool> isPaused,Action<PropState> publish,PassengerMotionRegistry passengers,FreePropMotionContext context,
-            Action<PropState,Vector2> moved=null,Action<PropState> settled=null)
+            Action<PropState,Vector2> moved,Action<PropState> settled=null,IReadOnlyList<ActorState> connectedPlayers=null)
         {
             if(world==null || dt<=0) return 0;
             if(string.IsNullOrEmpty(localOwner)) throw new ArgumentException("Не задан владелец симуляции свободных объектов.",nameof(localOwner));
@@ -21,7 +21,7 @@ namespace Remains.Gameplay
             if(isPaused==null) throw new ArgumentNullException(nameof(isPaused));
             if(context==null) throw new ArgumentNullException(nameof(context));
             context.Frame++;
-            using(Remains.Diagnostics.FrameHitchLog.Section("Тела: подготовка опор")) context.Prepare(world,localOwner,isPaused);
+            using(Remains.Diagnostics.FrameHitchLog.Section("Тела: подготовка опор")) context.Prepare(world,localOwner,isPaused,connectedPlayers);
             int stepped=0,sleeping=context.CountUnscheduledSleepers();
             var bodies=context.Scheduled;
             for(int i=0;i<bodies.Count;i++)
@@ -47,6 +47,9 @@ namespace Remains.Gameplay
             context.LastStepped=stepped;context.LastSleeping=sleeping;
             return stepped;
         }
+        public static int Step(WorldState world,string localOwner,float dt,Func<string,RoomLayout> roomForLevel,
+            Func<string,bool> isPaused,Action<PropState> publish,PassengerMotionRegistry passengers,FreePropMotionContext context)
+            =>Step(world,localOwner,dt,roomForLevel,isPaused,publish,passengers,context,null);
     }
 
     // Frame scratch data and body sleep. References stay live.
@@ -59,7 +62,7 @@ namespace Remains.Gameplay
         private const float Still=.0005f;
         private sealed class Rest
         {
-            public float x,y;public int still;public bool asleep;public RoomSurface[] surfaces;public int phase,generation;
+            public float x,y;public int still;public bool asleep,staticSupport;public RoomSurface[] surfaces;public int phase,generation;
         }
         // By body object (weak): a received snapshot reuses unchanged body objects, so their sleep survives it.
         private readonly System.Runtime.CompilerServices.ConditionalWeakTable<PropState,Rest> rest=new();
@@ -83,7 +86,8 @@ namespace Remains.Gameplay
                 Hull.width=prop.width;Hull.height=prop.height;
                 var feet=prop.Position-Vector2.up*prop.anchorHeight;
                 if(!PassengerMotion.PreviouslySupported(room,Hull,feet,dt) &&
-                    (ActorTerrainMotion.Supported(room,Hull,feet,bodyTops:false) || PropSupport.Supported(prop,feet,Support)))
+                    (state.staticSupport || ActorTerrainMotion.Supported(room,Hull,feet,bodyTops:false) ||
+                        PropSupport.Supported(prop,feet,Support)))
                     return true;
             }
             Wake(prop,state,trackSupport?0:SleepAfterSteps-1);
@@ -99,8 +103,13 @@ namespace Remains.Gameplay
             if(++state.still<SleepAfterSteps) return false;
             prop.vx=0;   // settle exactly: the decayed residual would otherwise count as motion forever
             state.x=prop.x;state.y=prop.y;state.surfaces=room.platforms;state.asleep=true;state.generation=prop.generation;
-            if(trackSupport && schedules.TryGetValue(prop.level,out var schedule) && schedule.Awake.Remove(prop))
-                schedule.Sleeping[DueSlot(state)].Add(prop);
+            if(trackSupport)
+            {
+                var feet=prop.Position-Vector2.up*prop.anchorHeight;
+                state.staticSupport=ActorTerrainMotion.SupportedByStaticSurface(room,Hull,feet);
+                if(schedules.TryGetValue(prop.level,out var schedule) && schedule.Awake.Remove(prop))
+                    schedule.Sleeping[DueSlot(state)].Add(prop);
+            }
             return true;
         }
 
@@ -173,14 +182,18 @@ namespace Remains.Gameplay
             if(rest.TryGetValue(prop,out var state) && state.asleep && Disturbed(prop,state)) Wake(prop,state);
             WakeAbove(prop,Mathf.Min(previous.y,prop.y),previous.x);
         }
-        internal void Prepare(WorldState world,string localOwner,Func<string,bool> isPaused)
+        internal void Prepare(WorldState world,string localOwner,Func<string,bool> isPaused,IReadOnlyList<ActorState> connectedPlayers)
         {
             ImpactSources.Clear();
             if(Props?.World!=world) {Props=new WorldPropView(world);supportDirty=true;}
             if(trackedOwner!=localOwner) {trackedOwner=localOwner;supportDirty=true;}
             levels.Clear();rooms.Clear();
-            foreach(var actor in world.actors)
+            var players=connectedPlayers??world.actors;
+            for(int i=0;i<players.Count;i++)
+            {
+                var actor=players[i];
                 if(actor.player && actor.connected && !levels.ContainsKey(actor.level)) levels.Add(actor.level,!isPaused(actor.level));
+            }
             // The live index follows changed bodies. A level is still stepped only
             // while players occupy it, and neighbour queries stay on that level.
             if(!trackSupport || supportDirty)
