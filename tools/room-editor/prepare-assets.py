@@ -11,7 +11,7 @@ if target.exists():
 target.mkdir(parents=True,exist_ok=True)
 for name in ['definitions.json','lands.json','decor-without-picture.json']:
     shutil.copy2(source/name,target/name)
-shutil.copytree(source/'Tiles',target/'Tiles',ignore=shutil.ignore_patterns('*.meta'),dirs_exist_ok=True)
+shutil.copytree(source/'Tiles',target/'Tiles',ignore=shutil.ignore_patterns('*.meta','*.asset'),dirs_exist_ok=True)
 rooms=[]
 for path in sorted(source.rglob('*.room.json')):
     relative=path.relative_to(source)
