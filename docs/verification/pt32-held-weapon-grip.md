@@ -8,3 +8,9 @@ Validation: Unity 6000.0.39f1 on Linux, OpenGLCore/llvmpipe. Run `Remains.Editor
 
 ![Before](pt32/before.png)
 ![After](pt32/after.png)
+
+## NPC levitation follow-up
+
+`fix/pt32-npc-levitation-glow` depends on `fix/pt32-held-weapon-grip` (`3546bff04`). The original presentation-only predicate omitted the real `raider2-mach`, `raider4-axe` and `raider4-shovel` actors: their atlas bodies levitate weapons without an atlas weapon socket. The policy now accepts the authoritative `RaiderAttacker.Levitated` role as well as pony presentation, always excluding atlas sockets. NPC colour uses the existing `PonyAppearance.Snapshot(actor).Magic` policy; a missing appearance uses the established default green.
+
+Native Unity 6000.0.39f1: `WeaponGripGlowChecks.RunRolesBatch` exit 0 checks the pony and all three real levitating raiders, every socket/turret exclusion, colour and owned material/sprite release. `RunTransformsBatch` exit 0 repeats the 1,470 catalog transform cases plus reuse/hide and release checks without another GPU capture. EditMode fixtures set `runInEditMode=true` before destruction so Unity invokes the runtime component's teardown; release is explicitly asserted after `DestroyImmediate`. No new screenshots or Player/LAN acceptance are claimed.
