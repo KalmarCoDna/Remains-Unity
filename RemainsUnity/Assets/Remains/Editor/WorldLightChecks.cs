@@ -125,7 +125,10 @@ namespace Remains.Editor
                 int builds=view.WorldLightBuilds;explosion.Draw(.08f);
                 Require(explosion.TryGetFlash(out var fading) && fading.GeometrySignature()==bright.GeometrySignature(),"Затухание перестроило геометрию вспышки.");
                 Draw(fading);
-                Require(view.WorldLightBuilds==builds && Mathf.Abs(Sample(near)-peak*.25f)<.004f,"Вспышка не затухла с ожидаемой силой.");
+                // The camera compresses highlights above one. Measure the linear part of the field.
+                float faded=Sample(beyond);
+                Require(view.WorldLightBuilds==builds && clear<1 && Mathf.Abs(faded-clear*.25f)<.004f,
+                    $"Вспышка не затухла с ожидаемой силой: до={clear}, после={faded}.");
                 light.SetDoors(new[]{new LevelLightScene.Door("blast-wall",new Rect(6,0,.3f,8),1,true)});Finish(light);
                 Draw(bright);float blocked=Sample(beyond);
                 Require(blocked<.001f && Sample(near)>1,"Преграда не перекрыла свет взрыва с нужной стороны.");
