@@ -4,6 +4,8 @@ import base64,io,json,math,os,shutil,sys
 from PIL import Image
 from playwright.sync_api import sync_playwright
 url=sys.argv[1] if len(sys.argv)>1 else 'http://127.0.0.1:8181'
+native=json.load(open(sys.argv[2],encoding='utf-8')) if len(sys.argv)>2 else None
+if native is not None:assert native['passed'] and native['colorSpace']=='Linear' and native['width']==32 and all(len(f['pixels'])==1024 for f in native['frames'])
 def png(width,height,pixels):
     img=Image.new('RGBA',(width,height));img.putdata(pixels);out=io.BytesIO();img.save(out,format='PNG');return 'data:image/png;base64,'+base64.b64encode(out.getvalue()).decode()
 def solid(r,g,b,a=255):return png(1,1,[(r,g,b,a)])
@@ -30,11 +32,12 @@ with sync_playwright() as p:
         }''',dict(plan=plan,points=points,pan=pan,cpu=cpu))
     results={}
     for cpu in [False,True]:
-        mode='CPU' if cpu else 'WebGL2';results[mode]=[]
+        mode='CPU' if cpu else 'WebGL2';results[mode]={}
         pattern=png(3,1,[(255,0,0,255),(0,255,0,255),(0,0,255,255)])
         fills=[command(kind='fill',texture=pattern,x=x,width=1,height=4) for x in range(4)]
         sample=render(fills,[(1,10),(8,10),(11,10)],cpu=cpu)
         if not cpu:assert sample['stats']['backend']=='webgl2',sample['stats']
+        for name,pixel in zip(['phase-x1','phase-x8','phase-x11'],sample['pixels']):results[mode][name]=pixel
         check(sample['pixels'][0],[0,255,0],mode+' bitmap texel');check(sample['pixels'][1],[0,0,255],mode+' continuous cell phase');check(sample['pixels'][2],[0,0,255],mode+' repeated phase')
         panned=render(fills,[(0,10)],pan=1,cpu=cpu);check(panned['pixels'][0],[0,0,255],mode+' room-origin pan phase')
         mask=png(2,2,[(255,255,255,255),(255,255,255,0),(255,255,255,0),(255,255,255,0)])
@@ -58,6 +61,13 @@ with sync_playwright() as p:
                 value=d*(1-a)+s*a if blend=='normal' else d*(1-a+s*a) if blend=='multiply' else 2*d*(.5*(1-a)+s*a)
                 expected.append(round(min(1,srgb(value))*255))
             check(sample['pixels'][0],expected,mode+' linear '+blend)
+            results[mode]['blend-'+str(['normal','multiply','overlay'].index(blend))]=sample['pixels'][0]
         print('PASS',mode,'continuous texture phase/pan, real alpha masks/flips, MAX background erase/orientation, foreground isolation, linear normal/multiply/2x-overlay')
+    if native is not None:
+        for mode,samples in results.items():
+            for sample in native['samples']:
+                expected=[round(srgb(sample['color'][c])*255) for c in ['r','g','b']]
+                check(samples[sample['name']],expected,mode+' actual Unity '+sample['name'],2)
+            print('PASS',mode,'matches actual Unity',native['version'],native['backend'],'RenderTexture readback within2 sRGB byte values')
     assert not errors,errors
     browser.close()

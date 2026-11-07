@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><TargetFramework>net8.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>disable</Nullable></PropertyGroup>
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>disable</Nullable><DebugType>none</DebugType><DebugSymbols>false</DebugSymbols><PathMap>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/../../..'))=/_/remains</PathMap></PropertyGroup>
   <ItemGroup><Compile Include="../../../RemainsUnity/Assets/Remains/RoomFormat/**/*.cs" Link="RoomFormat/%(RecursiveDir)%(Filename)%(Extension)" /></ItemGroup>
 <ItemGroup>
 <Compile Include="../../../RemainsUnity/Assets/Remains/Domain/ActorTerrainMotion.cs" Link="Movement/ActorTerrainMotion.cs"/>
