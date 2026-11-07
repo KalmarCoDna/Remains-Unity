@@ -37,7 +37,7 @@ namespace Remains.Runtime
         private float deadline,heldSince=-1,evidenceSince=-1,heldY,releasedY;
         private bool fixture,mapClick,manifestSent,prepared,threw,reported,finished,released,fell,downCaptured;
         private string savedSnapshot,capture;
-        private long savedRevision;
+        private long savedRevision,checkpointRevision;
         private readonly List<string> grenades=new();
         private readonly List<Launch> launches=new();
         private readonly List<Voice> landingVoices=new();
@@ -69,6 +69,7 @@ namespace Remains.Runtime
                 value.Session.Saves.SaveWorld(LegacyFactoryFixture.Create());
             }
             value.CommandSource=Command;value.Grenades.Created+=GrenadeCreated;value.Session.Notice+=Notice;
+            value.Session.RecoveryPersisted+=CheckpointPersisted;
             value.Session.ClientReady+=()=>
             {
                 NetworkClient.RegisterHandler<PropBodyPrepared>(Begin);
@@ -89,15 +90,20 @@ namespace Remains.Runtime
                     if(serverStage==4)
                     {NetworkServer.SendToAll(new PropBodyFinished {success=true,detail=$"Реальные Q/G, подтверждено гранат: {serverRequiredHits}. Проверены отпускание, свободная физика, один голос приземления и сохранение обоими участниками."});return;}
                     serverStage+=serverStage==1 && serverRequiredHits==1?2:1;
-                    var next=new PropBodyStage {stage=serverStage};
                     if(serverStage==4)
                     {
-                        value.Session.CommitWorld();
-                        var snapshot=value.Session.Saves.SelectedSnapshot();next.snapshot=snapshot.Id;next.revision=snapshot.Revision;
+                        checkpointRevision=value.Session.ServerWorld.revision+1;
+                        value.Session.CommitWorld();return;
                     }
-                    NetworkServer.SendToAll(next);
+                    NetworkServer.SendToAll(new PropBodyStage {stage=serverStage});
                 });
             };
+        }
+        private void CheckpointPersisted(RecoverySnapshot snapshot)
+        {
+            if(finished || checkpointRevision==0 || snapshot.Revision<checkpointRevision) return;
+            checkpointRevision=0;
+            NetworkServer.SendToAll(new PropBodyStage {stage=4,snapshot=snapshot.Id,revision=snapshot.Revision});
         }
         private void AcceptPrepared(NetworkConnectionToClient connection,PropBodyPrepared message)
         {
@@ -290,7 +296,7 @@ namespace Remains.Runtime
         private void VerifyPersistence()
         {
             string path=Path.Combine(runtime.Session.Saves.WorldDirectoryPath,"Worlds",runtime.Session.World.worldId,"Snapshots",savedSnapshot+".json");
-            if(!File.Exists(path)) throw new InvalidOperationException("Не получен настоящий сохранённый снимок: "+path);
+            if(!File.Exists(path)) return; // The client can persist the exact checkpoint after receiving the stage.
             var snapshot=new RecoverySnapshot(File.ReadAllText(path));var world=snapshot.CreateLiveWorld();
             var cargo=world.containers.Single(c=>c.id==manifest.cargo);var actor=world.Find(manifest.source);
             if(snapshot.Id!=savedSnapshot || snapshot.Revision!=savedRevision || cargo.owner!=manifest.owner || cargo.held ||
@@ -298,7 +304,7 @@ namespace Remains.Runtime
                 cargo.generation!=manifest.heldGeneration+1 || PropBodyProbeSetup.Inventory(cargo)!=manifest.contents ||
                 Vector2.Distance(cargo.Position,Cargo.Position)>.02f || !actor.down || actor.health!=0 ||
                 grenades.Count!=requiredHits || !grenades.All(id=>actor.resolvedExplosions.Count(x=>x==id)==1 && actor.resolvedAttacks.Count(x=>x==id)==1) ||
-                CountGrenades(actor)!=manifest.initialGrenades-2)
+                CountGrenades(actor)!=manifest.initialGrenades-requiredHits)
                 throw new InvalidOperationException("Сохранение потеряло физику, владельца, generation, вещи или реальные решения пострадавшего.");
             CompleteStage();
         }
@@ -331,7 +337,11 @@ namespace Remains.Runtime
         }
         private IEnumerator Exit(bool success) {yield return new WaitForSecondsRealtime(1.5f);Application.Quit(success?0:2);}
         private void OnDestroy()
-        {if(runtime!=null) {runtime.Grenades.Created-=GrenadeCreated;runtime.Session.Notice-=Notice;}}
+        {
+            if(runtime==null) return;
+            runtime.Grenades.Created-=GrenadeCreated;runtime.Session.Notice-=Notice;
+            runtime.Session.RecoveryPersisted-=CheckpointPersisted;
+        }
         [Serializable] private sealed class Voice {public int id;public string clip;public float volume;public bool muted,playing;}
         [Serializable] private sealed class Launch {public string id;public int stage;public float time,remaining;public bool sourceObserver;public Vector2 position,velocity;}
         [Serializable] private sealed class Proof
