@@ -1,0 +1,42 @@
+{
+    "revision": "5b33ecdc8fe6e1b7ea9ee6d1bc1aa977c7e2d641",
+    "utc": "2026-11-07T15:10:18.6866290Z",
+    "device": "llvmpipe (LLVM 19.1.7, 256 bits)",
+    "cases": [
+        {
+            "name": "world light and explosion",
+            "status": "PASS",
+            "detail": ""
+        },
+        {
+            "name": "horn brightness and occlusion",
+            "status": "PASS",
+            "detail": ""
+        },
+        {
+            "name": "transition door",
+            "status": "PASS",
+            "detail": ""
+        },
+        {
+            "name": "room light authoring",
+            "status": "PASS",
+            "detail": ""
+        },
+        {
+            "name": "room light preparation",
+            "status": "PASS",
+            "detail": ""
+        },
+        {
+            "name": "incremental light publication",
+            "status": "PASS",
+            "detail": ""
+        },
+        {
+            "name": "actor shadow source",
+            "status": "PASS",
+            "detail": ""
+        }
+    ]
+}
