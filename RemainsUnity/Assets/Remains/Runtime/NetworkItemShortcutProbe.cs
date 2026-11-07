@@ -335,6 +335,16 @@ namespace Remains.Runtime
             if(HeldItemSelection.Selected(actor)?.id!=selectedBefore || InventoryJournal.Count(actor,"p10")!=selectedCountBefore || actor.inventoryUses.Count!=selectedUsesBefore)
                 {Finish(false,"Один выбор строки уже использовал предмет.");yield break;}
             var use=runtime.Hud.UseItemRect.GetComponent<Button>();
+            if(phase==4 && selectedBefore==ammo.id)
+            {
+                if(!use.interactable || use.GetComponentInChildren<Text>().text!="Убрать из копыт")
+                    {Finish(false,"UI не предлагает убрать остаток патронов после одиночного броска.");yield break;}
+                yield return UiPointerProbe.Click(runtime.Hud.UseItemRect);
+                actor=runtime.Session.LocalActor;
+                if(!runtime.Hud.InventoryOpen || HeldItemSelection.HasSelection(actor) ||
+                    InventoryJournal.Count(actor,"p10")!=selectedCountBefore || actor.inventoryUses.Count!=selectedUsesBefore)
+                    {Finish(false,"UI не убрал остаток патронов без расхода и закрытия инвентаря.");yield break;}
+            }
             if(!use.interactable || use.GetComponentInChildren<Text>().text!="Взять в копыта")
                 {Finish(false,"UI не показывает доступное действие удерживания патронов.");yield break;}
             yield return UiPointerProbe.Click(runtime.Hud.UseItemRect);
