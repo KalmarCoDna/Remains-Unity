@@ -119,6 +119,7 @@ namespace Remains.Networking
         }
         public void DrainSources(string level,List<PropImpactSample> output)
             =>newSources.Drain(level,output);
+        public bool HasPendingSources(string level)=>newSources.HasPending(level);
         private void Sample(NetworkConnectionToClient connection,PropImpactSampleMessage message)
         {
             var actor=session.ConnectedActor(connection);var world=session.ServerWorld;
