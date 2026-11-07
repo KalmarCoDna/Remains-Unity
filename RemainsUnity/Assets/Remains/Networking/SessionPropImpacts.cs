@@ -34,6 +34,7 @@ namespace Remains.Networking
         private PropImpactPlausibility plausibility;
         public void PrepareLevel(string level,RoomLayout room)=>plausibility.Prepare(level,room);
         public IReadOnlyDictionary<string,PropImpactSample> Samples=>accepted;
+        public event Action<PropState> ImpulseAdopted;
         public SessionPropImpacts(CoopSession session)
         {
             this.session=session;session.Changed+=()=>
@@ -89,7 +90,7 @@ namespace Remains.Networking
                 if(session.World==null || contact?.source?.world!=session.World.worldId) return;
                 ResetWorld();
                 var prop=WorldProps.Find(session.World,contact.source.prop);
-                PropImpactRules.AdoptImpulse(prop,contact,ClientImpulseEpoch);
+                if(PropImpactRules.AdoptImpulse(prop,contact,ClientImpulseEpoch)) ImpulseAdopted?.Invoke(prop);
                 Put(localPending,contact);
             }));
         }

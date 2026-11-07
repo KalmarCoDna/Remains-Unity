@@ -77,8 +77,20 @@ namespace Remains.Editor
             var context=new FreePropMotionContext(trackSupport:true);
             int published=0;
             for(int i=0;i<17;i++) FreePropMotion.Step(world,"local",1f/60,_=>room,_=>false,_=>published++,null,context);
-            Require(context.LastStepped==0 && context.LastSleeping==1 && published==17,
-                "Спящее тело попало в шаг физики или потеряло отправку позы.");
+            Require(context.LastStepped==0 && context.LastSleeping==1 && published==10,
+                "Спящее тело продолжило обычный шаг или обычную отправку позы.");
+            var cadence=new FreePropPoseCadence();
+            Require(cadence.ShouldPublish(upper,0,out bool initial) && initial,"Первая поза не опубликована.");
+            int heartbeats=0;
+            cadence.PublishDue(.04,_=>heartbeats++);
+            cadence.PublishDue(1,id=>
+            {
+                Require(id==upper.id && cadence.ShouldPublish(upper,1,out bool changed) && !changed,
+                    "Повтор покоя изменил версию сетевой позы.");
+                heartbeats++;
+            });
+            cadence.PublishDue(1.99,_=>heartbeats++);
+            Require(heartbeats==1,"Повтор позы прошёл раньше срока или не попал в очередь.");
             var notify=typeof(FreePropMotionContext).GetMethod("ExternalMotion",
                 System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic);
             Require(notify!=null,"Не найден вход изменения сетевой позы.");
@@ -87,6 +99,14 @@ namespace Remains.Editor
             FreePropMotion.Step(world,"local",1f/60,_=>room,_=>false,null,null,context);
             Require(context.LastStepped==1 && upper.y<1.5f && upper.vy<0,
                 "Сдвиг чужой опоры в другой сектор не разбудил тело в следующий шаг.");
+            for(int i=0;i<120;i++) FreePropMotion.Step(world,"local",1f/60,_=>room,_=>false,null,null,context);
+            var impulse=typeof(FreePropMotionContext).GetMethod("WakeImpulse",
+                System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic);
+            Require(impulse!=null,"Не найден вход импульса сетевого контакта.");
+            float x=upper.x;upper.vx=1;upper.generation++;
+            impulse.Invoke(context,new object[]{upper});
+            FreePropMotion.Step(world,"local",1f/60,_=>room,_=>false,null,null,context);
+            Require(context.LastStepped==1 && upper.x>x,"Импульс не разбудил тело в следующий шаг.");
         }
 
         private static void Require(bool condition,string message) {if(!condition) throw new InvalidOperationException(message);}

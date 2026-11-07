@@ -189,7 +189,7 @@ namespace Remains.Runtime
             Interactions=new InteractionAdapter(Session);
             Grenades=new GrenadeController(Session,Interactions,Combat,Geometry);
             Telekinesis=new TelekinesisController(Session,Interactions,Geometry);
-            freeProps=new FreePropSimulation(Session,Geometry,Interactions);
+            freeProps=new FreePropSimulation(Session,Geometry,Interactions,Platforms);
             visualLayers=new ActorVisualLayers(transform,visualOrders);
             var interactionVisuals=CreateOwnedObject("Визуальные взаимодействия").AddComponent<InteractionVisuals>();
             interactionVisuals.Initialize(Session,Interactions,Grenades,Geometry,visualLayers,Combat.Reload);

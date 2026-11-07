@@ -13,7 +13,7 @@ namespace Remains.Gameplay
             =>Step(world,localOwner,dt,roomForLevel,isPaused,publish,passengers,new FreePropMotionContext());
         public static int Step(WorldState world,string localOwner,float dt,Func<string,RoomLayout> roomForLevel,
             Func<string,bool> isPaused,Action<PropState> publish,PassengerMotionRegistry passengers,FreePropMotionContext context,
-            Action<PropState,Vector2> moved=null)
+            Action<PropState,Vector2> moved=null,Action<PropState> settled=null)
         {
             if(world==null || dt<=0) return 0;
             if(string.IsNullOrEmpty(localOwner)) throw new ArgumentException("Не задан владелец симуляции свободных объектов.",nameof(localOwner));
@@ -22,7 +22,7 @@ namespace Remains.Gameplay
             if(context==null) throw new ArgumentNullException(nameof(context));
             context.Frame++;
             using(Remains.Diagnostics.FrameHitchLog.Section("Тела: подготовка опор")) context.Prepare(world,localOwner,isPaused);
-            int stepped=0,sleeping=context.PublishSleeping(publish);
+            int stepped=0,sleeping=context.CountUnscheduledSleepers();
             var bodies=context.Scheduled;
             for(int i=0;i<bodies.Count;i++)
             {
@@ -31,17 +31,18 @@ namespace Remains.Gameplay
                 // A body carried by telekinesis may leave bodies resting on it without support (no geometry needed).
                 if(prop.held) {context.WakeAbove(prop,prop.y);continue;}
                 var room=context.Room(prop.level,roomForLevel);
+                if(context.Sleeping(prop,room,dt)) {sleeping++;publish?.Invoke(prop);continue;}
                 var passenger=room.dynamicSurfaces?.Count>0?passengers?.ForProp(prop):null;
-                if(context.Sleeping(prop,room)) {sleeping++;publish?.Invoke(prop);continue;}   // pose heartbeat continues
                 float previousX=prop.x,previousY=prop.y;
                 PropMotion.Step(prop,room,dt,null,context.Support,passenger,context.Hull);
                 if(PropImpactRules.IsBox(prop) && PropImpactRules.Dangerous(new Vector2(prop.vx,prop.vy)))
                     context.ImpactSources.Add((prop,prop.Position,new Vector2(prop.vx,prop.vy)));
                 context.Support.Moved(prop,previousX);
-                context.Settle(prop,room,previousX,previousY,passenger);
+                bool fellAsleep=context.Settle(prop,room,previousX,previousY,passenger);
                 moved?.Invoke(prop,new Vector2(previousX,previousY));
                 stepped++;
                 publish?.Invoke(prop);
+                if(fellAsleep && publish==null) settled?.Invoke(prop);
             }
             context.LastStepped=stepped;context.LastSleeping=sleeping;
             return stepped;
@@ -51,8 +52,7 @@ namespace Remains.Gameplay
     // Frame scratch data and body sleep. References stay live.
     // Sleep: a body still for SleepAfterSteps steps (no motion, no velocity, not carried by a platform) stops stepping
     // until something can move it: its own velocity or position changed, the level geometry changed (doors), a body
-    // it may rest on moved or is held. Each sleeper still takes a normal step every VerifyEvery frames (staggered),
-    // so a support removed by any other path is noticed within that period.
+    // it may rest on moved or is held. Each sleeper still checks support every VerifyEvery frames, staggered.
     public sealed class FreePropMotionContext
     {
         public const int SleepAfterSteps=10,VerifyEvery=30;
@@ -68,29 +68,40 @@ namespace Remains.Gameplay
         public int LastStepped {get;internal set;}
         public int LastSleeping {get;internal set;}
 
-        internal bool Sleeping(PropState prop,RoomLayout room)
+        internal bool Sleeping(PropState prop,RoomLayout room,float dt)
         {
             if(!rest.TryGetValue(prop,out var state) || !state.asleep) return false;
             bool disturbed=Disturbed(prop,state) || !ReferenceEquals(state.surfaces,room.platforms);
-            if(disturbed || (Frame+state.phase)%VerifyEvery==0)
+            if(disturbed)
             {
-                Wake(prop,state,disturbed?0:SleepAfterSteps-1);
+                Wake(prop,state);
                 return false;
             }
-            return true;
+            if((Frame+state.phase)%VerifyEvery!=0) return true;
+            if(trackSupport)
+            {
+                Hull.width=prop.width;Hull.height=prop.height;
+                var feet=prop.Position-Vector2.up*prop.anchorHeight;
+                if(!PassengerMotion.PreviouslySupported(room,Hull,feet,dt) &&
+                    (ActorTerrainMotion.Supported(room,Hull,feet,bodyTops:false) || PropSupport.Supported(prop,feet,Support)))
+                    return true;
+            }
+            Wake(prop,state,trackSupport?0:SleepAfterSteps-1);
+            return false;
         }
 
-        internal void Settle(PropState prop,RoomLayout room,float previousX,float previousY,PassengerMotionState passenger)
+        internal bool Settle(PropState prop,RoomLayout room,float previousX,float previousY,PassengerMotionState passenger)
         {
             if(!rest.TryGetValue(prop,out var state)) rest.Add(prop,state=new Rest {phase=phases++%VerifyEvery});
             bool moved=Mathf.Abs(prop.x-previousX)>Still || Mathf.Abs(prop.y-previousY)>Still;
-            if(moved) {WakeAbove(prop,Mathf.Min(previousY,prop.y));state.still=0;return;}
-            if(Mathf.Abs(prop.vx)>Still || prop.vy!=0 || passenger?.SupportId!=null) {state.still=0;return;}
-            if(++state.still<SleepAfterSteps) return;
+            if(moved) {WakeAbove(prop,Mathf.Min(previousY,prop.y));state.still=0;return false;}
+            if(Mathf.Abs(prop.vx)>Still || prop.vy!=0 || passenger?.SupportId!=null) {state.still=0;return false;}
+            if(++state.still<SleepAfterSteps) return false;
             prop.vx=0;   // settle exactly: the decayed residual would otherwise count as motion forever
             state.x=prop.x;state.y=prop.y;state.surfaces=room.platforms;state.asleep=true;state.generation=prop.generation;
             if(trackSupport && schedules.TryGetValue(prop.level,out var schedule) && schedule.Awake.Remove(prop))
                 schedule.Sleeping[DueSlot(state)].Add(prop);
+            return true;
         }
 
         // Wakes sleepers that may rest on this body: overlapping it horizontally, with feet at or above its lowest top.
@@ -143,12 +154,16 @@ namespace Remains.Gameplay
                 schedule.Sleeping[DueSlot(state)].Remove(prop)) schedule.Awake.Add(prop);
             state.asleep=false;state.still=still;
         }
-        internal void WakeLevel(string level,RoomLayout room,long revision)
+        internal void WakeLevel(string level)
         {
             if(!schedules.TryGetValue(level,out var schedule)) return;
             waking.Clear();
             foreach(var slot in schedule.Sleeping) waking.AddRange(slot);
             foreach(var prop in waking) if(rest.TryGetValue(prop,out var state)) Wake(prop,state);
+        }
+        internal void WakeImpulse(PropState prop)
+        {
+            if(rest.TryGetValue(prop,out var state) && state.asleep) Wake(prop,state);
         }
         internal void InvalidateSupport()=>supportDirty=true;
         internal void ExternalMotion(PropState prop,Vector2 previous)
@@ -203,7 +218,7 @@ namespace Remains.Gameplay
                 }
             }
         }
-        internal int PublishSleeping(Action<PropState> publish)
+        internal int CountUnscheduledSleepers()
         {
             if(!trackSupport) return 0;
             int sleeping=0;
@@ -213,10 +228,7 @@ namespace Remains.Gameplay
                 if(!level.Value || !schedules.TryGetValue(level.Key,out var schedule)) continue;
                 for(int i=0;i<schedule.Sleeping.Length;i++)
                 {
-                    if(i==due) continue; // Due bodies use the ordinary post-step publication.
-                    var slot=schedule.Sleeping[i];
-                    sleeping+=slot.Count;
-                    if(publish!=null) foreach(var prop in slot) publish(prop);
+                    if(i!=due) sleeping+=schedule.Sleeping[i].Count;
                 }
             }
             return sleeping;
