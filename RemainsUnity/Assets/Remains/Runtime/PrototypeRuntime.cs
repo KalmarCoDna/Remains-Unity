@@ -202,11 +202,13 @@ namespace Remains.Runtime
                 var lightArea=Session.LocalActor is {} litViewer?(Rect?)cameraFollower.AnimationArea(litViewer):null;
                 if(fireVisuals!=null)foreach(var e in fireVisuals.Lights.Emissions)
                     if(!lightArea.HasValue || lightArea.Value.Overlaps(Rect.MinMaxRect(e.Bounds.xMin-e.Reach,e.Bounds.yMin-e.Reach,e.Bounds.xMax+e.Reach,e.Bounds.yMax+e.Reach)))worldLightEmissions.Add(e);
-                hornLights.Append(visuals,worldLightEmissions,lightArea);
+                hornLights.Append(visuals,worldLightEmissions,lightArea,Geometry.Get(shownLevel));
+                Explosions.AppendLights(worldLightEmissions,lightArea);
                 using(Remains.Diagnostics.FrameHitchLog.Section("Тени: персонажи")) actorShadows.Present(ActiveFactoryLighting,visuals,interactionVisuals,emissions,interactionVisuals.MuzzleSourceIds,
                     lightArea,worldLightEmissions);
                 using(Remains.Diagnostics.FrameHitchLog.Section("Тени: проекции вспышек")) actorShadows.CollectProjectedLightShadows(projectedFlashShadows);
                 using(Remains.Diagnostics.FrameHitchLog.Section("Свет: вспышки и тени")) ActiveFactoryLighting.RenderMuzzleFlashes(emissions,projectedFlashShadows,interactionVisuals.MuzzleSourceIds,worldLightEmissions);
+                DoorVisuals.PublishPreparedArtwork();
             },(attack,emission)=>
             {
                 if(LevelPresentationReady && ActiveFactoryLighting!=null)
@@ -235,7 +237,7 @@ namespace Remains.Runtime
             Audio.ObservePickups(Pickup);
             HealingAudio=CreateOwnedObject("Звуки лечения").AddComponent<HealingItemAudio>();HealingAudio.Initialize(Session.HealingAudio,Audio);
             DeathAudio=CreateOwnedObject("Звуки смерти NPC").AddComponent<ActorDeathAudio>();DeathAudio.Initialize(Session,DamageFeedback,Audio);
-            DoorVisuals=CreateOwnedObject("Двери мира").AddComponent<DoorVisuals>();DoorVisuals.Initialize(Session,Audio,visualOrders);
+            DoorVisuals=CreateOwnedObject("Двери мира").AddComponent<DoorVisuals>();DoorVisuals.Initialize(Session,Audio,visualOrders,DoorArtworkReady);
             var mechanismVisuals=CreateOwnedObject("Механизмы мира").AddComponent<MechanismVisuals>();mechanismVisuals.Initialize(Session,Platforms,visualOrders);
             MineVisuals=CreateOwnedObject("Мины мира").AddComponent<MineVisuals>();MineVisuals.Initialize(Session,Audio,visualOrders);
             HazardVisuals=CreateOwnedObject("Ловушки мира").AddComponent<HazardVisuals>();HazardVisuals.Initialize(Session,Audio,visualOrders);
@@ -423,6 +425,13 @@ namespace Remains.Runtime
         }
 
         private void RefreshVisualOrders()=>visualOrders.Reconcile(Session.World,Session.LocalActor?.level,Session.LastChangedParts);
+
+        private bool DoorArtworkReady()
+        {
+            var factory=ActiveFactoryLighting;string level=Session.LocalActor?.level;
+            return factory==null || level==null || factory.Room==null || !ReferenceEquals(factory.Room,Geometry.Find(level)) ||
+                factory.PresentedDoorRevision==Geometry.OcclusionRevision(level);
+        }
 
         private void RefreshRoomOcclusion(string level,RoomLayout room,long revision)
         {

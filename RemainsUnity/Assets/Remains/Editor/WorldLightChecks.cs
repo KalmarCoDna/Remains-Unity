@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using Remains.Content;
 using Remains.Presentation;
 using UnityEditor;
 using UnityEngine;
@@ -13,15 +14,51 @@ namespace Remains.Editor
     {
         private static string Output=>Path.GetFullPath("../.reference/world-light-20261106");
         [Serializable] private sealed class Report
-        {public bool success;public int stableBuilds,movingBuilds,doorBuilds;public float maskError;public long cachedBytes;}
+        {public bool success;public int stableBuilds,movingBuilds,doorBuilds;public float maskError;public long cachedBytes;
+            public float[] rangeDistances,rayRange,polarRange;}
         public static void RunBatch()
         {try{Run();EditorApplication.Exit(0);}catch(Exception error){Debug.LogException(error);EditorApplication.Exit(1);}}
         public static void Run()
         {
             Directory.CreateDirectory(Output);var report=new Report();long before=LightTextureBudget.Bytes;
-            Check(report);Require(LightTextureBudget.Bytes==before,"Утечка текстур: "+(LightTextureBudget.Bytes-before));
+            CheckRange(report);Check(report);CheckExplosionFlash();
+            Require(LightTextureBudget.Bytes==before,"Утечка текстур: "+(LightTextureBudget.Bytes-before));
             CheckFireSources();CheckAffine();report.success=true;File.WriteAllText(Path.Combine(Output,"checks.json"),JsonUtility.ToJson(report,true));
-            Debug.Log("WorldLightChecks PASS: цвет, маски, fade без transport, движение своего источника, дверь, expiry, пустой кадр, Dispose.");
+            Debug.Log("WorldLightChecks PASS: затухание по дальности, цвет, маски, fade без transport, движение своего источника, дверь, expiry, пустой кадр, Dispose.");
+        }
+        private static void CheckRange(Report report)
+        {
+            const int pixelsPerMetre=10, sourceX=10, sourceY=19;
+            const float width=.4f;
+            var point=new Vector2((sourceX+.5f)/pixelsPerMetre,(sourceY+.5f)/pixelsPerMetre);
+            using var scene=new LevelLightScene(new float[120,40],Vector2.zero,pixelsPerMetre,Array.Empty<LevelLightScene.ObjectSprite>());
+            foreach(float reach in new[]{.8f,8f})
+            {
+                var source=new LevelLightSource("range",LevelLightSourceKind.Lamp,new[]{new Vector4(point.x,point.y,1,0)},
+                    Color.white,width,reach,new Rect(point-Vector2.one*.01f,Vector2.one*.02f),new RectInt(0,0,120,40),true);
+                var sources=new LevelLightSources(new[]{source},120,40);
+                using var rays=new DirectLight(scene,sources,8*1024*1024);
+                using var polar=new PolarDirectLight(scene,sources,8*1024*1024);
+                rays.BuildAll();polar.BuildAll();
+                var rayPixels=Read(rays.Sum);var polarPixels=Read(polar.Sum);
+                int last=Mathf.RoundToInt(reach*pixelsPerMetre)+2;
+                var distances=new float[last+1];var raySamples=new float[last+1];var polarSamples=new float[last+1];
+                float reference=Mathf.Min(1,reach/4);
+                float referenceWindow=1-Mathf.Pow(reference/reach,2);
+                for(int offset=0;offset<=last;offset++)
+                {
+                    float distance=offset/(float)pixelsPerMetre;
+                    float window=Mathf.Max(0,1-Mathf.Pow(distance/reach,2))/referenceWindow;
+                    float expected=2*Mathf.Atan(width/(2*Mathf.Max(distance,.5f/pixelsPerMetre)))*window*window;
+                    int sample=sourceY*rays.Sum.width+sourceX+offset;
+                    float ray=rayPixels[sample].r,pol=polarPixels[sample].r;
+                    float tolerance=Mathf.Max(.00003f,expected*.0015f);
+                    Require(Mathf.Abs(ray-expected)<tolerance && Mathf.Abs(pol-expected)<tolerance,
+                        $"Дальность {reach} м, отсчёт {distance} м: ожидается {expected}, лучи {ray}, полярный {pol}.");
+                    distances[offset]=distance;raySamples[offset]=ray;polarSamples[offset]=pol;
+                }
+                report.rangeDistances=distances;report.rayRange=raySamples;report.polarRange=polarSamples;
+            }
         }
         private static WorldLightEmission Point(string id,Vector2 at,Color color,float gain=1)
             =>new(id,new[]{new Vector4(at.x,at.y,1,0)},new Rect(at-Vector2.one*.02f,Vector2.one*.04f),color,.3f,4,gain);
@@ -64,6 +101,45 @@ namespace Remains.Editor
             sources.Begin();sources.Fire(fire,new[]{new Remains.Domain.FirePatch(new Vector2(2,1),.3f),new Remains.Domain.FirePatch(new Vector2(3,1),.3f)},.4f);sources.End();Require(old.GeometrySignature()==sources.Emissions[0].GeometrySignature(),"Fade поменял геометрию огня.");
             sources.Begin();sources.Bottle("flight",new Vector2(3,2));sources.End();var a=sources.Emissions[0].GeometrySignature();sources.Begin();sources.Bottle("flight",new Vector2(3.2f,2));sources.End();Require(a!=sources.Emissions[0].GeometrySignature(),"Бутылка потеряла движение света.");
             sources.Begin();sources.End();Require(sources.Emissions.Count==0,"Погасший огонь остался в списке.");
+        }
+        private static void CheckExplosionFlash()
+        {
+            var origin=new Vector2(4,4);var near=origin+Vector2.right;var beyond=origin+Vector2.right*3;
+            var prefab=GameAssets.Load<ExplosionVisual>("Presentation/Explosion");
+            Require(prefab!=null,"Нет игрового префаба взрыва.");
+            var explosion=Object.Instantiate(prefab);
+            var scene=new LevelLightScene(new float[150,80],Vector2.zero,10,Array.Empty<LevelLightScene.ObjectSprite>());
+            using var light=new LevelLight(scene,new LevelLightSources(Array.Empty<LevelLightSource>(),150,80),.2f);light.BuildAll();
+            var context=new LightShaderContext();using var view=new LevelLightView(light,context);
+            context.Activate();
+            try
+            {
+                void Draw(params WorldLightEmission[] sources)=>view.Present(scene.WorldRect,null,null,null,sources);
+                float Sample(Vector2 point)=>At(Read("_RemainsRadiance"),view.WorldArea,Shader.GetGlobalTexture("_RemainsRadiance").width,point).r;
+                explosion.Initialize(null,"factory:0",origin,"explosion:grenade-check");
+                Require(explosion.TryGetFlash(out var bright) && bright.Position==origin && bright.Gain==1,"Детонация не дала вспышку в точке взрыва.");
+                Draw(bright);
+                float peak=Sample(near),clear=Sample(beyond);
+                Require(peak>1 && clear>.1f && Sample(origin+Vector2.right*8.1f)<.001f,"Вспышка не осветила открытый участок или вышла за предел.");
+                Save("explosion-flash.png",Shader.GetGlobalTexture("_RemainsRadiance"));
+                int builds=view.WorldLightBuilds;explosion.Draw(.08f);
+                Require(explosion.TryGetFlash(out var fading) && fading.GeometrySignature()==bright.GeometrySignature(),"Затухание перестроило геометрию вспышки.");
+                Draw(fading);
+                // The camera compresses highlights above one. Measure the linear part of the field.
+                float faded=Sample(beyond);
+                Require(view.WorldLightBuilds==builds && clear<1 && Mathf.Abs(faded-clear*.25f)<.004f,
+                    $"Вспышка не затухла с ожидаемой силой: до={clear}, после={faded}.");
+                light.SetDoors(new[]{new LevelLightScene.Door("blast-wall",new Rect(6,0,.3f,8),1,true)});Finish(light);
+                Draw(bright);float blocked=Sample(beyond);
+                Require(blocked<.001f && Sample(near)>1,"Преграда не перекрыла свет взрыва с нужной стороны.");
+                Save("explosion-flash-blocked.png",Shader.GetGlobalTexture("_RemainsRadiance"));
+                explosion.Draw(.18f);Require(!explosion.TryGetFlash(out _),"Завершённый взрыв продолжает светить.");
+                Draw();Require(view.WorldLightBytes==0 && Max(Read("_RemainsRadiance"))<.001f,"Поле вспышки осталось после истечения.");
+                explosion.Initialize(null,"factory:0",origin);
+                Require(!explosion.TryGetFlash(out _),"Косметическая анимация создала свет детонации.");
+                Debug.Log($"Grenade flash GPU: near={peak:F4}, open={clear:F4}, blocked={blocked:F4}; fade and expiry PASS.");
+            }
+            finally{context.Release();Object.DestroyImmediate(explosion.gameObject);}
         }
         private static void CheckAffine()
         {
