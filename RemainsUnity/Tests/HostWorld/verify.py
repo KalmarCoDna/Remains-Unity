@@ -11,6 +11,7 @@ p.add_argument('--port',type=int,default=19440)
 p.add_argument('--timeout',type=int,default=180)
 a=p.parse_args();a.player=a.player.resolve();a.output=a.output.resolve();a.output.mkdir(parents=True,exist_ok=True)
 if not a.player.is_file():p.error('Player does not exist')
+if os.name=='posix' and not os.environ.get('DISPLAY') and not os.environ.get('WAYLAND_DISPLAY'):p.error('Graphical Player requires DISPLAY or WAYLAND_DISPLAY')
 assembly=a.player.parent/(a.player.stem+'_Data')/'Managed/Assembly-CSharp.dll'
 metadata={'utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),'player':str(a.player),'assembly_sha256':hashlib.sha256(assembly.read_bytes()).hexdigest(),'runs':[]}
 (a.output/'summary.json').write_text(json.dumps(metadata,ensure_ascii=False,indent=2))
