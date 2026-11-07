@@ -62,7 +62,14 @@ namespace Remains.Editor
             Require(InventoryJournal.Count(actor,definition)==1&&available.items.Where(value=>value.definition==definition).Sum(value=>value.count)==before-1,"единственный подбор/уменьшение источника");
             Require(!inventory.PrepareClaim("loot-proof",available.id,available.items.FirstOrDefault()?.id,actor),"повтор операции не выдаёт дубль");
             string snapshot=StateJson.ToJson(world);
-            string path="../.reference/factory-loot-world.json";File.WriteAllText(path,snapshot);world=StateJson.FromJson<WorldState>(File.ReadAllText(path));
+            string directory=Path.Combine(Path.GetTempPath(),"remains-factory-loot-"+Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.CreateDirectory(directory);
+                string path=Path.Combine(directory,"world.json");
+                File.WriteAllText(path,snapshot);world=StateJson.FromJson<WorldState>(File.ReadAllText(path));
+            }
+            finally {if(Directory.Exists(directory))Directory.Delete(directory,true);}
             FactoryContentSources.Clear();FactoryContentSources.Prepare(world,"factory:0");
             var second=RoomPhysicalContent.Read(FactoryContentSources.Require(world,"factory:0"),"factory:0");
             Require(!RoomContentInstaller.Apply(world,new RoomContentBatch {physical=second}),"повтор посещения не переустанавливает содержимое");
@@ -95,7 +102,10 @@ namespace Remains.Editor
                 InventorySource source=state;var rect=outline.Bounds(source.Bounds);
                 Require(Vector2.Distance(rect.min,(Vector2)actual.min)<.0001f && Vector2.Distance(rect.max,(Vector2)actual.max)<.0001f,
                     "рамка instr2 совпадает с рисунком; область доступа остаётся отдельной");
-                Require(Mathf.Abs(source.Bounds.yMin-rect.yMin-.24f)<.0001f,"исходный pivot instr2 не заменён нижним краем");
+                // The cursor offset intentionally aligns access with the artwork; it does not move the saved pivot.
+                Require(Mathf.Abs(state.y-rect.yMin-.24f)<.0001f,"исходный pivot instr2 не заменён нижним краем");
+                Require(Vector2.Distance(source.Bounds.min,rect.min)<.0001f && Vector2.Distance(source.Bounds.max,rect.max)<.0001f,
+                    $"область доступа instr2 учитывает исходное смещение курсора: access={source.Bounds}, artwork={rect}");
                 Debug.Log($"PASS регистрация контейнера: id={state.id}, artwork={rect}, access={source.Bounds}; рамка рисунка отдельно от области доступа.");
             }
             finally {UnityEngine.Object.DestroyImmediate(view.gameObject);}

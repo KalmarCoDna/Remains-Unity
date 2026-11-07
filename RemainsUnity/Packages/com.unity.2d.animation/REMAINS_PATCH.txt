@@ -1,0 +1,19 @@
+Embedded Unity 2D Animation 10.1.4, with its original LICENSE.md and metadata.
+Upstream archive: https://download.packages.unity.com/com.unity.2d.animation/-/com.unity.2d.animation-10.1.4.tgz
+
+Remains patch, 2026-11-07:
+Runtime/BatchedDeformation/GpuDeformationSystem.cs registers the existing
+ClearFallbackBuffer callback with Application.quitting. Registration is idempotent;
+normal Cleanup also removes the callback. No animation, skinning, shader, API,
+resource, or package dependency version is changed.
+
+The upstream AfterSceneLoad initializer creates s_FallbackBuffer even when no
+SpriteSkin ever creates a DeformationManager. In that case its normal Cleanup
+has no owner, and the Player finalizer reports an undisposed ComputeBuffer.
+
+Regression: Remains.Editor.AnimationBufferLifetimeChecks.Run. It checks the
+registered quit callback, actual buffer invalidation, repeated initialization,
+and repeated cleanup. Player validation must also check final shutdown logs.
+
+When replacing this embedded package, retain this ownership fix or verify that
+the upstream package releases the fallback when no SpriteSkin is instantiated.
