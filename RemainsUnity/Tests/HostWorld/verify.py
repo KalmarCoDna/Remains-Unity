@@ -25,16 +25,16 @@ for mode in a.modes:
   try:
    for index in range(2):
     role='host' if index==0 else 'client';character='session-host' if index==0 else 'session-client-1'
-    report=directory/(role+'-report.json');reports.append(report)
+    report=directory/(character+'-report.json');reports.append(report)
     probe=scenario+'-'+role
     if scenario in ['contact-audio-props','contact-audio-targets','prop-body','door','shortcuts']:
      probe=scenario.replace('contact-audio-','contact-audio-frames-')+'-'+role if scenario.startswith('contact-audio-') else scenario+'-frames-'+role
     width,height=(1920,1080) if scenario.startswith('contact-audio-') or scenario=='prop-body' else (1280,720)
-    command=[str(a.player),'-force-glcore','-job-worker-count','2','-screen-width',str(width),'-screen-height',str(height),'-screen-fullscreen','0','-logFile',str(directory/(role+'.log')),'--role',role,'--character',character,'--save-dir',str(directory/(role+'-save')),'--smoke',probe,'--probe-peers','2','--probe-fps','60','--report',str(report),'--port',str(port)]
+    command=[str(a.player),'-force-glcore','-job-worker-count','2','-screen-width',str(width),'-screen-height',str(height),'-screen-fullscreen','0','-logFile',str(directory/(character+'.log')),'--role',role,'--character',character,'--save-dir',str(directory/(character+'-save')),'--smoke',probe,'--probe-peers','2','--probe-fps','60','--report',str(report),'--port',str(port)]
     if not a.windowed:command.insert(1,'-batchmode')
     if mode!='default':command+=['--host-self-ticks',mode]
-    (directory/(role+'-command.json')).write_text(json.dumps(command,ensure_ascii=False,indent=2))
-    stream=(directory/(role+'-stdout.log')).open('w');streams.append(stream)
+    (directory/(character+'-command.json')).write_text(json.dumps(command,ensure_ascii=False,indent=2))
+    stream=(directory/(character+'-stdout.log')).open('w');streams.append(stream)
     processes.append(subprocess.Popen(command,stdout=stream,stderr=subprocess.STDOUT))
     if index==0:time.sleep(2)
    deadline=time.monotonic()+a.timeout
@@ -49,7 +49,7 @@ for mode in a.modes:
     data=json.loads(report.read_text()) if report.exists() else {'success':False,'detail':'Missing report'}
     data.update(role=role,exit_code=process.returncode)
     results.append(data)
-   host_log=(directory/'host.log').read_text(errors='replace')
+   host_log=(directory/'session-host.log').read_text(errors='replace')
    observed='off' if 'Режим хоста: один мир' in host_log else 'on' if 'Режим хоста: самоотправка' in host_log else 'unknown'
    passed=all(r.get('success') and r['exit_code']==0 for r in results) and (mode!='default' or not a.expect_default or observed==a.expect_default)
    result={'mode':mode,'observed_mode':observed,'scenario':scenario,'success':passed,'directory':str(directory),'reports':results}
