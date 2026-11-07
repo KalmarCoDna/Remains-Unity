@@ -51,8 +51,7 @@ namespace Remains.Gameplay
             bool downEntry=grounded && input.y<-.1f && selected!=null && actor.y>selected.bottom+.001f &&
                 ActorTerrainMotion.IsClear(room,hull,actor.Position+Vector2.down*RoomSupport.ContactTolerance);
             // Up can catch a ladder in flight; down starts from support or continues an existing hold.
-            bool ladder = selected!=null && !detach && !stepOff && (wasClimbing ||
-                input.y>.1f && actor.y<selected.top-.001f || downEntry);
+            bool ladder = LadderMotion.Attach(selected,wasClimbing,detach,stepOff,downEntry,input.y,actor.y);
             bool drop=dropPressed && grounded && ActorTerrainMotion.CanDrop(room,hull,actor.Position);
             bool wasCrouched=actor.crouched;
             CrouchMotion.Step(actor,room,settings,input,jump,grounded,ladder,drop,dt);
@@ -70,9 +69,10 @@ namespace Remains.Gameplay
             if (ladder)
             {
                 actor.facing=(int)selected.facing;
-                actor.vy = input.y * settings.climbSpeed * (input.y<0?settings.climbDownMultiplier:1);
+                var climbVelocity=LadderMotion.Velocity(selected,actor.x,input.y,dt,settings.walkSpeed,settings.climbSpeed,settings.climbDownMultiplier);
+                actor.vy=climbVelocity.y;
                 // A held body stays at its grip even while horizontal input is pressed.
-                actor.vx=dt>0?Mathf.Clamp((selected.x+selected.movementOffset-actor.x)/dt,-settings.walkSpeed,settings.walkSpeed):0;
+                actor.vx=climbVelocity.x;
                 var nextBody=actor.Position+new Vector2(actor.vx*dt,actor.vy*dt);
                 if(wasClimbing && actor.vy<0 && LadderPoseContact.ShouldRelease(actor,room,nextBody))
                 {
@@ -114,24 +114,7 @@ namespace Remains.Gameplay
             StanceAnimation.Select(actor,actor.crouched?(Mathf.Abs(actor.vx)>.1f?"crawl":"crouch"):ladder ? ladderEntry.Select(actor,room) : !supported ? AirbornePose.Select(actor,launched,grounded || wasClimbing || drop) : Mathf.Abs(actor.vx) > 0.1f ? sprint ? "run" : "walk" : "idle",wasCrouched,standingPose,room,slopePose);
         }
         private RoomLadder SelectLadder(ActorState actor)
-        {
-            bool InReach(RoomLadder ladder)=>Mathf.Abs(actor.x-ladder.x-ladder.movementOffset)<.65f &&
-                actor.y>=ladder.bottom-.1f && actor.y<ladder.top+.2f;
-            // Overlapping entry envelopes at a Z junction must not change an existing grip.
-            if(actor.climbing && ladderActorId==actor.id && ladderGeneration==actor.generation &&
-                heldLadder!=null && System.Array.IndexOf(room.ladders,heldLadder)>=0 && InReach(heldLadder)) return heldLadder;
-            RoomLadder selected=null;float bestHeight=float.PositiveInfinity,bestAxis=float.PositiveInfinity;
-            foreach(var ladder in room.ladders)
-            {
-                if(!InReach(ladder)) continue;
-                float height=Mathf.Abs(actor.y-Mathf.Clamp(actor.y,ladder.bottom,ladder.top));
-                float axis=Mathf.Abs(actor.x-ladder.x-ladder.movementOffset);
-                if(height>bestHeight || height==bestHeight && axis>bestAxis) continue;
-                if(height==bestHeight && axis==bestAxis && selected!=null &&
-                    (ladder.bottom>selected.bottom || ladder.bottom==selected.bottom && ladder.x>=selected.x)) continue;
-                selected=ladder;bestHeight=height;bestAxis=axis;
-            }
-            return selected;
-        }
+            =>LadderMotion.Select(room.ladders,actor.x,actor.y,actor.climbing,
+                ladderActorId==actor.id && ladderGeneration==actor.generation?heldLadder:null);
     }
 }

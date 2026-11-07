@@ -51,3 +51,10 @@
 
 # Generated performance-test metadata.
 RemainsUnity/Assets/Resources/PerformanceTestRun*.json*
+
+# Standalone public browser editor; Unity project files remain ignored above.
+!/tools/
+/tools/*
+!/tools/room-editor/
+!/tools/room-editor/**/
+!/tools/room-editor/**/*.csproj
