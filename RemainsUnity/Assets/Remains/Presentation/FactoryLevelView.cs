@@ -175,7 +175,8 @@ namespace Remains.Presentation
         public long AppliedOcclusionRevision=>AppliedDoorRevision;
         public event Action<IRoomLighting> PresentationChanged;
         public event Action<IRoomLighting,Exception> PresentationFailed;
-        public bool IsReady=>root!=null && levelLight!=null && Failure==null;
+        private bool noGraphics;
+        public bool IsReady=>root!=null && (levelLight!=null || noGraphics) && Failure==null;
         public void Synchronize(RoomLayout room,WorldState world,long revision)
         {
             if(!ReferenceEquals(room,Room)) throw new InvalidOperationException("Свет завода ссылается на другую игровую геометрию.");
@@ -202,7 +203,7 @@ namespace Remains.Presentation
         // Every frame from the presentation: actor shadow masks and the frame's muzzle flashes over the camera area.
         public void RenderMuzzleFlashes(IReadOnlyList<SpriteEmission> emissions,IReadOnlyList<ProjectedLightShadow> masks,IReadOnlyList<string> sourceIds,IReadOnlyList<WorldLightEmission> worldLights=null)
         {
-            if(!IsReady) return;
+            if(!IsReady || lightView==null) return;
             try {lightView.Present(viewArea,emissions,masks,sourceIds,worldLights);if(!levelLight.HasPendingPublication)ApplyLampArtwork();}
             catch(Exception error) {ReportFailure(error);throw;}
         }
@@ -279,6 +280,7 @@ namespace Remains.Presentation
         {
             if(level==null) throw new ArgumentNullException(nameof(level));
             if(root!=null) throw new InvalidOperationException("Вид уровня уже подготовлен: повторная подготовка запрещена.");
+            noGraphics=Application.isPlaying && SystemInfo.graphicsDeviceType==UnityEngine.Rendering.GraphicsDeviceType.Null;
             brokenLampArt=GameAssets.Load<BrokenLampArt>(BrokenLampArt.ResourcePath)??throw new InvalidOperationException("Нет каталога разбитой графики ламп: "+BrokenLampArt.ResourcePath);
             brokenLampArt.Validate();
             Room=geometry??level.Physics;
@@ -356,6 +358,7 @@ namespace Remains.Presentation
         public void Focus(Vector2 world)
         {
             if(root==null) throw new InvalidOperationException("Вид уровня не подготовлен.");
+            if(noGraphics) return;
             bool first=levelLight==null;
             if(first)
             {

@@ -130,7 +130,7 @@ namespace Remains.Runtime
                 return;
             }
             if(SystemInfo.graphicsDeviceType==UnityEngine.Rendering.GraphicsDeviceType.Null)
-                throw new System.InvalidOperationException("Для игрового процесса требуется графическое устройство. Запустите Player без параметра -nographics.");
+                Debug.LogWarning("Player запущен без графического устройства. Свет не выводится; при отсутствии светового поля NPC используют штатное зрение без затемнения.",this);
             TransitionTiming.Enabled=Options.Smoke?.StartsWith("lighting-preparation")==true;
             TransitionTiming.Reset();
             using(TransitionTiming.Measure("runtime.catalog-prepare",GetInstanceID().ToString()))
@@ -197,7 +197,7 @@ namespace Remains.Runtime
             FireVisuals fireVisuals=null;
             interactionVisuals.ConfigureMuzzleLighting(emissions=>
             {
-                if(!LevelPresentationReady || ActiveFactoryLighting==null) {actorShadows.Clear();return;}
+                if(!LevelPresentationReady || ActiveFactoryLighting?.Light==null) {actorShadows.Clear();return;}
                 worldLightEmissions.Clear();
                 var lightArea=Session.LocalActor is {} litViewer?(Rect?)cameraFollower.AnimationArea(litViewer):null;
                 if(fireVisuals!=null)foreach(var e in fireVisuals.Lights.Emissions)
@@ -209,7 +209,7 @@ namespace Remains.Runtime
                 using(Remains.Diagnostics.FrameHitchLog.Section("Свет: вспышки и тени")) ActiveFactoryLighting.RenderMuzzleFlashes(emissions,projectedFlashShadows,interactionVisuals.MuzzleSourceIds,worldLightEmissions);
             },(attack,emission)=>
             {
-                if(LevelPresentationReady && ActiveFactoryLighting!=null)
+                if(LevelPresentationReady && ActiveFactoryLighting?.Light!=null)
                     using(Remains.Diagnostics.FrameHitchLog.Section("Тени: подготовка вспышки")) actorShadows.PrepareFlash(ActiveFactoryLighting,visuals,interactionVisuals,"flash:"+attack.id,emission,
                         Session.LocalActor is {} viewer?(Rect?)cameraFollower.AnimationArea(viewer):null);
             });
