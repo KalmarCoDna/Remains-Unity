@@ -11,6 +11,7 @@ namespace Remains.Presentation
     public sealed class InteractionVisuals : MonoBehaviour
     {
         private CoopSession session;
+        public Func<ActorState,ActorState> PresentationActor {get;set;}
         private InteractionAdapter interactions;
         private GrenadeController grenades;
         private SimulationGeometry geometry;
@@ -263,9 +264,10 @@ namespace Remains.Presentation
             string shownLevel=session.LocalActor?.level,localOwner=session.LocalOwner;
             using(Remains.Diagnostics.FrameHitchLog.Section("Тела: представления"))
                 DrawMovingBodies(shownLevel,localOwner);
-            foreach(var actor in session.World.actors)
+            foreach(var canonicalActor in session.World.actors)
             {
-                if(!weapons.TryGetValue(actor.id,out var view)) continue;
+                if(!weapons.TryGetValue(canonicalActor.id,out var view)) continue;
+                var actor=PresentationActor?.Invoke(canonicalActor)??canonicalActor;
                 if(string.IsNullOrEmpty(actor.weapon) || HeldItemSelection.HasSelection(actor) || Remains.Content.WeaponCatalog.IsGrenade(actor.weapon) && !actor.heldItemPoseValid) {view.SetVisible(false);continue;}
                 if(!sprites.TryGetValue(actor.weapon,out var sprite))
                 { if(missingGraphics.Add(actor.id+":"+actor.weapon)) Debug.LogWarning($"Отсутствует графика оружия {actor.weapon} у {actor.id}.",this);view.SetVisible(false);continue; }

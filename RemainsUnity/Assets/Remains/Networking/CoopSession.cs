@@ -13,7 +13,7 @@ using Remains.Diagnostics;
 namespace Remains.Networking
 {
     // Transport adapter and session coordinator. Domain rules live in separate services.
-    public sealed class CoopSession : NetworkManager
+    public sealed partial class CoopSession : NetworkManager
     {
         public WorldState World { get; private set; }
         public WorldState ServerWorld { get; private set; }
@@ -92,6 +92,11 @@ namespace Remains.Networking
         public IReadOnlyCollection<string> LastChangedParts {get;private set;}
         private void RaiseChanged(WorldChangeKind kind=WorldChangeKind.All,IReadOnlyCollection<string> parts=null)
         {
+            if(SharedHostWorld && World!=null && LocalActorId!=null) {QueueSharedHostChanged(kind,parts);return;}
+            DeliverChanged(kind,parts);
+        }
+        private void DeliverChanged(WorldChangeKind kind=WorldChangeKind.All,IReadOnlyCollection<string> parts=null)
+        {
             var handlers=Changed;if(handlers==null) return;
             LastChange=kind;LastChangedParts=kind==WorldChangeKind.All?null:parts;
             try
@@ -113,6 +118,7 @@ namespace Remains.Networking
         // canonical part back into the live world. Needs the canonical copy of transport v2.
         public bool Predict(string key,WorldChangeKind kind,Func<WorldState,bool> apply,Func<WorldState,bool> confirmed,Action<WorldState,WorldState> revert)
         {
+            if(SharedHostWorld) return false; // the request already ran the authoritative operation
             if(World==null || !tickReceiver.Ready || !apply(World)) return false;
             predictions.Add(new ClientPredictions.Entry {Key=key,Kind=kind,Confirmed=confirmed,Revert=revert,Deadline=Time.unscaledTime+PredictionSeconds});
             RaiseChanged(kind,new[]{key});
@@ -272,8 +278,11 @@ namespace Remains.Networking
         {
             using var serverStartupTiming=Remains.Diagnostics.FrameHitchLog.Section("Запуск сервера: всего");
             CancelStopNotification();
+            Debug.Log("Режим хоста: "+(HostSelfTicks?"самоотправка":"один мир"));
+            FrameHitchLog.Note("Режим хоста: "+(HostSelfTicks?"самоотправка":"один мир"));
             savingFailed=false;
             BeginJoinSelection();
+            localServerHandlers.Clear();ResetHostWorldBuffers();
             canonicalPersistedRevision=-1;
             npcHits=gameObject.AddComponent<NpcHitDelivery>();
             npcHits.Initialize(this,owner=>
@@ -294,21 +303,21 @@ namespace Remains.Networking
             ServerWorld=null;
             Lobby.RegisterServer(UseLobby);
             if(!UseLobby) StartSelectedWorld(null,false);
-            NetworkServer.RegisterHandler<JoinMessage>(Remains.Networking.MessageTiming.Server<JoinMessage>(Join));
+            RegisterServerHandler<JoinMessage>(Remains.Networking.MessageTiming.Server<JoinMessage>(Join));
             serverActors.Clear();serverActorsReceived.Clear();
-            NetworkServer.RegisterHandler<ActorMessage>(Remains.Networking.MessageTiming.Server<ActorMessage>(UpdateActor));
-            NetworkServer.RegisterHandler<ActorResyncRequest>(Remains.Networking.MessageTiming.Server<ActorResyncRequest>((connection,request)=>
+            RegisterServerHandler<ActorMessage>(Remains.Networking.MessageTiming.Server<ActorMessage>(UpdateActor));
+            RegisterServerHandler<ActorResyncRequest>(Remains.Networking.MessageTiming.Server<ActorResyncRequest>((connection,request)=>
             {
                 if(serverActors.TryFull(request.actor,out var full)) connection.Send(full);
                 else Debug.LogWarning($"Запрос полного состояния персонажа без отправленной базы: actor={request.actor}, connection={connection.connectionId}.");
             }));
-            NetworkServer.RegisterHandler<PoseMessage>(Remains.Networking.MessageTiming.Server<PoseMessage>(UpdatePose));
-            NetworkServer.RegisterHandler<AttackMessage>(Remains.Networking.MessageTiming.Server<AttackMessage>(RelayAttack));
-            NetworkServer.RegisterHandler<NpcHitMessage>(Remains.Networking.MessageTiming.Server<NpcHitMessage>(RelayNpcHit));
-            NetworkServer.RegisterHandler<FriendlyHitMessage>(Remains.Networking.MessageTiming.Server<FriendlyHitMessage>(RelayFriendlyHit));
-            NetworkServer.RegisterHandler<ClaimMessage>(Remains.Networking.MessageTiming.Server<ClaimMessage>(Claim));
-            NetworkServer.RegisterHandler<ReviveMessage>(Remains.Networking.MessageTiming.Server<ReviveMessage>(Revive));
-            NetworkServer.RegisterHandler<WorldResyncRequest>(Remains.Networking.MessageTiming.Server<WorldResyncRequest>((connection,request)=>
+            RegisterServerHandler<PoseMessage>(Remains.Networking.MessageTiming.Server<PoseMessage>(UpdatePose));
+            RegisterServerHandler<AttackMessage>(Remains.Networking.MessageTiming.Server<AttackMessage>(RelayAttack));
+            RegisterServerHandler<NpcHitMessage>(Remains.Networking.MessageTiming.Server<NpcHitMessage>(RelayNpcHit));
+            RegisterServerHandler<FriendlyHitMessage>(Remains.Networking.MessageTiming.Server<FriendlyHitMessage>(RelayFriendlyHit));
+            RegisterServerHandler<ClaimMessage>(Remains.Networking.MessageTiming.Server<ClaimMessage>(Claim));
+            RegisterServerHandler<ReviveMessage>(Remains.Networking.MessageTiming.Server<ReviveMessage>(Revive));
+            RegisterServerHandler<WorldResyncRequest>(Remains.Networking.MessageTiming.Server<WorldResyncRequest>((connection,request)=>
             {
                 if(ServerWorld==null) return;
                 if(!owners.ContainsKey(connection.connectionId))
@@ -330,7 +339,7 @@ namespace Remains.Networking
                     else SendFullWorld(connection,full);
                 }
             }));
-            NetworkServer.RegisterHandler<BackupAckMessage>(Remains.Networking.MessageTiming.Server<BackupAckMessage>((connection, ack) =>
+            RegisterServerHandler<BackupAckMessage>(Remains.Networking.MessageTiming.Server<BackupAckMessage>((connection, ack) =>
             {
                 if(ServerWorld==null) return;
                 if (ack.world != ServerWorld.worldId) Debug.LogWarning($"Подтверждение чужого мира: клиент={connection.connectionId}, мир={ack.world}, ожидается={ServerWorld.worldId}.");
@@ -485,7 +494,7 @@ namespace Remains.Networking
                 if(received.resync)
                 {
                     Debug.LogWarning("Изменение мира не применено, запрошен полный снимок: "+received.reason);
-                    NetworkClient.Send(new WorldResyncRequest {world=World?.worldId,snapshot=message.snapshot,reason=received.reason});
+                    SendToServer(new WorldResyncRequest {world=World?.worldId,snapshot=message.snapshot,reason=received.reason});
                     return;
                 }
             }));
@@ -493,7 +502,7 @@ namespace Remains.Networking
             NetworkClient.RegisterHandler<ActorMessage>(Remains.Networking.MessageTiming.Client<ActorMessage>(message =>
             {
                 if(!clientActorsReceived.TryRead(message,out var actor))
-                {NetworkClient.Send(new ActorResyncRequest {actor=message.actor});return;}
+                {SendToServer(new ActorResyncRequest {actor=message.actor});return;}
                 MergeActor(actor);
             }));
             // The host lacks the base of this client's actor stream: the current state goes whole.
@@ -501,7 +510,7 @@ namespace Remains.Networking
             {
                 clientActors.Forget(request.actor);
                 var actor=World?.Find(request.actor);
-                if(actor!=null && actor.owner==LocalOwner) NetworkClient.Send(clientActors.Next(actor));
+                if(actor!=null && actor.owner==LocalOwner) SendToServer(clientActors.Next(actor));
             }));
             Projectiles.RegisterClient();
             NetworkClient.RegisterHandler<PoseMessage>(Remains.Networking.MessageTiming.Client<PoseMessage>(ReceivePose));
@@ -550,7 +559,7 @@ namespace Remains.Networking
                     characterUtf8=JoinCharacter.Encode(character==null?null:JsonUtility.ToJson(character)),
                     modFingerprint=WeaponCatalog.ModFingerprint,acceptMismatch=acceptMismatch };
                 JoinCharacter.RequireFits(join,Transport.active.GetMaxPacketSize(Channels.Reliable));
-                NetworkClient.Send(join);
+                SendToServer(join);
             }
             catch(Exception failure)
             {
@@ -702,6 +711,7 @@ namespace Remains.Networking
         // as a snapshot (owned poses, unacknowledged health, self-healing), for the changed parts only.
         private void ReceiveTick(WorldTickMessage message)
         {
+            if(SharedHostWorld) throw new InvalidOperationException("Shared host must not receive its own world tick.");
             if(World==null || LocalActorId==null) return;   // before admission: the full world carries the base seq
             long tickStarted=System.Diagnostics.Stopwatch.GetTimestamp();
             var worldBeforeTick=World;
@@ -714,14 +724,14 @@ namespace Remains.Networking
             {
                 tickReceiver.Forget();
                 Debug.LogWarning($"Тик мира {message.seq} не применён, запрошен полный снимок. {error}");
-                NetworkClient.Send(new WorldResyncRequest {world=World.worldId,snapshot="tick:"+message.seq,reason="тик "+message.seq+": "+error.Message});
+                SendToServer(new WorldResyncRequest {world=World.worldId,snapshot="tick:"+message.seq,reason="тик "+message.seq+": "+error.Message});
                 return;
             }
             if(result==WorldTickReceiver.Result.Gap)
             {
                 long expected=tickReceiver.Seq+1;tickReceiver.Forget();
                 Debug.LogWarning($"Пропущен тик мира: получен {message.seq}, ожидался {expected}; запрошен полный снимок.");
-                NetworkClient.Send(new WorldResyncRequest {world=World.worldId,snapshot="tick:"+message.seq,reason=$"пропуск тика {expected}"});
+                SendToServer(new WorldResyncRequest {world=World.worldId,snapshot="tick:"+message.seq,reason=$"пропуск тика {expected}"});
                 return;
             }
             if(result!=WorldTickReceiver.Result.Applied) return;
@@ -739,7 +749,7 @@ namespace Remains.Networking
                 // A throw from a Mirror handler drops the connection: ask for the whole world instead.
                 tickReceiver.Forget();
                 Debug.LogWarning($"Рабочая копия тика {message.seq} не собрана, запрошен полный снимок. {error}");
-                NetworkClient.Send(new WorldResyncRequest {world=World.worldId,snapshot="tick:"+message.seq,reason="копия тика "+message.seq+": "+error.Message});
+                SendToServer(new WorldResyncRequest {world=World.worldId,snapshot="tick:"+message.seq,reason="копия тика "+message.seq+": "+error.Message});
                 return;
             }
             var reused=new HashSet<string>(StringComparer.Ordinal);
@@ -900,7 +910,7 @@ namespace Remains.Networking
                 PlayTimePersisted?.Invoke(timeCheckpoint);
                 if(!localHost) RecoveryPersisted?.Invoke(snapshot);
                 if(NetworkClient.isConnected && World?.worldId==snapshot.WorldId)
-                    NetworkClient.Send(new BackupAckMessage {world=snapshot.WorldId,revision=snapshot.Revision,snapshot=snapshot.Id});
+                    SendToServer(new BackupAckMessage {world=snapshot.WorldId,revision=snapshot.Revision,snapshot=snapshot.Id});
             },SaveWriteFailed);
         }
 
@@ -937,6 +947,12 @@ namespace Remains.Networking
         }
         private void SendFullWorld(NetworkConnectionToClient connection,RecoverySnapshot snapshot,string owner=null,string actor=null)
         {
+            if(IsSharedHostConnection(connection))
+            {
+                deliveredSnapshots[connection.connectionId]=snapshot.ReplicationId;
+                if(owner!=null) WelcomeSharedHost(snapshot,owner,actor);
+                return;
+            }
             long seq=snapshotTickSeq.TryGetValue(snapshot.ReplicationId,out long recorded)?recorded:tickComposer.Seq;
             WorldReplication.Send(connection,snapshot,owner,actor,seq);
             deliveredSnapshots[connection.connectionId]=snapshot.ReplicationId;
@@ -996,13 +1012,14 @@ namespace Remains.Networking
             while(preparedSnapshotIds.Count>PreparedSnapshotsTracked) snapshotTickSeq.Remove(preparedSnapshotIds.Dequeue());
             // Legacy diagnostic subscribers explicitly request the file SHA. Ordinary replication never does.
             RecoveryPrepared?.Invoke(snapshot.Id,snapshot.Revision);
+            if(SharedHostWorld && LocalActorId!=null) QueueRecoveryReceipt(snapshot);
             FinishRecoveryMeasurement("recovery-prepared",started,snapshot);
             return snapshot;
         }
 
         private void MergeActor(ActorState actor)
         {
-            if (World == null) return;
+            if (World == null || SharedHostWorld) return;
             var current = World.Find(actor.id);
             WeaponRecoilReplication.Normalize(actor,Pause.Revision,Pause.IsPaused(actor.level),"состояние актёра / входящий");
             ActorHoldRules.PreserveNewerTarget(current,actor);
@@ -1052,7 +1069,7 @@ namespace Remains.Networking
                     if(CosmeticEquipment.TryApplyOwnerSelection(actor,incoming))
                     {
                         ServerWorld.revision++;
-                        NetworkServer.SendToAll(serverActors.Next(actor));
+                        BroadcastState(serverActors.Next(actor));
                     }
                 }
                 catch(InvalidOperationException error)
@@ -1114,7 +1131,7 @@ namespace Remains.Networking
             // The death is the explosion (spider mine): the commit carries both.
             if(deathBlast!=null) {DeathBlasts.Detonate(deathBlast);return;}
             if(checkpoint) {BroadcastWorld();return;}
-            NetworkServer.SendToAll(serverActors.Next(incoming));
+            BroadcastState(serverActors.Next(incoming));
         }
 
         // changes: what the notification reports; publishing an actor changes only actors (a received world passes
@@ -1122,13 +1139,14 @@ namespace Remains.Networking
         public void PublishActor(ActorState actor)=>PublishActor(actor,WorldChangeKind.Actors);
         private void PublishActor(ActorState actor,WorldChangeKind changes)
         {
+            if(SharedHostWorld) {PublishSharedHostActor(actor,changes);return;}
             selfHealing.Observe(World?.worldId,actor);
             RaiseChanged(changes,changes==WorldChangeKind.Actors?new[]{"actors:"+actor.id}:null);
             if (NetworkClient.isConnected)
             {
                 actor.motionSequence=unchecked(actor.motionSequence+1);
                 StampMotion(actor);
-                NetworkClient.Send(clientActors.Next(actor));
+                SendToServer(clientActors.Next(actor));
             }
         }
 
@@ -1142,11 +1160,12 @@ namespace Remains.Networking
             ApplyPose(actor, message);
             // The sample reaches every client in this message; ticks refresh the actor's text spread over a second.
             WorldChanges.MarkMotion(ServerWorld,actor);
-            NetworkServer.SendToAll(message, channel);
+            BroadcastState(message, channel);
         }
 
         private void ReceivePose(PoseMessage message)
         {
+            if(SharedHostWorld) return;
             var actor = World?.Find(message.actor);
             if (actor == null || actor.owner == LocalOwner || actor.generation != message.generation || actor.lifecycleSequence!=message.lifecycleSequence) return;
             if (!clientPoses.Accept(message.actor,message.generation,message.lifecycleSequence,message.sequence)) return;
@@ -1194,7 +1213,7 @@ namespace Remains.Networking
         {
             WeaponRecoilReplication.Normalize(actor,Pause.Revision,Pause.IsPaused(actor.level),"публикация позы");
             StampMotion(actor);
-            NetworkClient.Send(new PoseMessage
+            var message=new PoseMessage
         {
             sentAt=actor.motionSentAt,
             actor = actor.id, generation = actor.generation,lifecycleSequence=actor.lifecycleSequence, sequence = actor.motionSequence=unchecked(actor.motionSequence+1),
@@ -1203,7 +1222,13 @@ namespace Remains.Networking
             weaponSelectionRevision=actor.weaponSelectionRevision,weaponRecoil=actor.weaponRecoil.Copy(),heldItemPoseX=actor.heldItemPoseX,heldItemPoseY=actor.heldItemPoseY,heldItemPoseValid=actor.heldItemPoseValid,
             attackId=actor.attackId,attackBusy=actor.attackBusy,attackRemaining=actor.attackRemaining,attackCooldown=actor.attackCooldown,
             target=actor.player?null:actor.target,perception=actor.player?null:actor.perception.Copy()
-        }, final?Channels.Reliable:Channels.Unreliable);
+        };
+            if(SharedHostWorld)
+            {
+                WorldChanges.MarkMotion(ServerWorld,actor);
+                BroadcastState(message,final?Channels.Reliable:Channels.Unreliable);
+            }
+            else SendToServer(message,final?Channels.Reliable:Channels.Unreliable);
         }
 
         public void Fire(AttackEvent attack)
@@ -1268,17 +1293,18 @@ namespace Remains.Networking
                 var source=World?.Find(attack.attacker);
                 if(source==null || source.owner!=LocalOwner || Pause.IsPaused(attack.level)) return;
                 NpcNaturalAttack.ValidateEvent(attack,source);
-                NetworkClient.Send(AttackMessage.From(attack));return;
+                SendToServer(AttackMessage.From(attack));return;
             }
             var definition=WeaponCatalog.Get(attack.weapon);
-            if(definition.projectileSpeed<=0) {NetworkClient.Send(AttackMessage.From(attack));return;}
+            if(definition.projectileSpeed<=0) {SendToServer(AttackMessage.From(attack));return;}
             var actor=World?.Find(attack.attacker);
             if(actor==null || actor.owner!=LocalOwner || actor.level!=attack.level || Pause.IsPaused(attack.level)) return;
             attack.sourceOwner=LocalOwner;attack.sourcePlayer=actor.player;attack.friendlyFireDecision=World.friendlyFireDecision;
             ProjectileLaunch.Create(attack,definition);
             // Reliable launch precedes progress and contact messages from its local simulation.
-            NetworkClient.Send(AttackMessage.From(attack));
-            Projectiles.BeginLocal(attack);if(attack.volley==null) Recoil.Commit(actor,attack);
+            if(SharedHostWorld) Projectiles.SuppressLocalEcho(attack.id);
+            SendToServer(AttackMessage.From(attack));
+            if(!SharedHostWorld) Projectiles.BeginLocal(attack);if(attack.volley==null) Recoil.Commit(actor,attack);
             if(!GameplayFailurePending) AttackReceived?.Invoke(attack);
         }
         private void RelayAttack(NetworkConnectionToClient connection, AttackMessage message)
@@ -1329,14 +1355,14 @@ namespace Remains.Networking
             TraceNpcHit("npc-hit-reported",message);
             // Keep the routed contact even for a locally owned target: the host may
             // already have handed it off. Send before publishing the local result.
-            NetworkClient.Send(message);
+            SendToServer(message);
             var target=World?.Find(message.target);
             if(target!=null && !target.player && target.owner==LocalOwner && target.generation==message.generation)
                 NpcHitReceived?.Invoke(message);
             // The normal receiver checks scope/pause and uses the same durable
             // attack receipt. Its later network echo cannot apply damage twice.
         }
-        public void ReportFriendlyHit(FriendlyHitMessage message)=>NetworkClient.Send(message);
+        public void ReportFriendlyHit(FriendlyHitMessage message)=>SendToServer(message);
         private void RelayFriendlyHit(NetworkConnectionToClient connection,FriendlyHitMessage message)
         {
             var attack=JsonUtility.FromJson<AttackEvent>(message.attackJson);
@@ -1381,7 +1407,7 @@ namespace Remains.Networking
             var actor=LocalActor;
             if(actor==null || !NetworkClient.isConnected) return null;
             string transaction=Guid.NewGuid().ToString("N");
-            NetworkClient.Send(new ClaimMessage {transaction=transaction,container=container,item=item,quantity=quantity,
+            SendToServer(new ClaimMessage {transaction=transaction,container=container,item=item,quantity=quantity,
                 actorGeneration=actor.generation,actorLifecycle=actor.lifecycleSequence});
             return transaction;
         }
@@ -1395,7 +1421,7 @@ namespace Remains.Networking
         {
             if(healer==null || target==null || healer.player || healer.owner!=LocalOwner || HealingRules.Rejection(healer,target,selfHeal)!=null) return null;
             string transaction=Guid.NewGuid().ToString("N");npcHealing.Add(transaction);
-            NetworkClient.Send(new ReviveMessage {target=target.id,transaction=transaction,healer=healer.id,selfHeal=selfHeal,
+            SendToServer(new ReviveMessage {target=target.id,transaction=transaction,healer=healer.id,selfHeal=selfHeal,
                 healerGeneration=healer.generation,healerLifecycle=healer.lifecycleSequence,damageSequence=healer.damageSequence,
                 targetGeneration=target.generation,targetLifecycle=target.lifecycleSequence});
             return transaction;
@@ -1407,13 +1433,13 @@ namespace Remains.Networking
             var stack=thrower.inventory.Find(item=>item.definition==plan.weapon && InventoryAvailability.Count(thrower,item)>0);
             if(stack==null) return null;
             string transaction=Guid.NewGuid().ToString("N");
-            NetworkClient.Send(new ThrowRequest {transaction=transaction,level=thrower.level,item=stack.id,thrower=thrower.id,
+            SendToServer(new ThrowRequest {transaction=transaction,level=thrower.level,item=stack.id,thrower=thrower.id,
                 generation=thrower.generation,lifecycle=thrower.lifecycleSequence,originX=plan.origin.x,originY=plan.origin.y,
                 aimX=plan.burst.x,aimY=plan.burst.y,vx=plan.velocity.x,vy=plan.velocity.y,mirrored=thrower.facing<0,
                 angularVelocity=Remains.Gameplay.GrenadeLaunch.AngularVelocity(plan.velocity,thrower.facing,Remains.Content.WeaponCatalog.Get(plan.weapon))});
             return transaction;
         }
-        public void RequestDebugGrant(string definition,int count)=>NetworkClient.Send(new DebugGrantRequest {definition=definition,count=count});
+        public void RequestDebugGrant(string definition,int count)=>SendToServer(new DebugGrantRequest {definition=definition,count=count});
         public void RequestSelfHeal()=>RequestSelfHeal(null);
         public void RequestSelfHeal(string itemId)=>RequestHealing(LocalActorId,true,itemId);
         private string RequestHealing(string targetId,bool selfHeal,string itemId=null)
@@ -1425,9 +1451,9 @@ namespace Remains.Networking
             {
                 string reason=HealingRules.Rejection(healer,target,true);
                 if(reason!=null) {Notice?.Invoke(reason);return null;}
-                selfHealing.Capture(World.worldId,transaction,healer);SelfHealingRequested?.Invoke(transaction);
+                if(!SharedHostWorld) selfHealing.Capture(World.worldId,transaction,healer);SelfHealingRequested?.Invoke(transaction);
             }
-            NetworkClient.Send(new ReviveMessage {target=targetId,transaction=transaction,selfHeal=selfHeal,
+            SendToServer(new ReviveMessage {target=targetId,transaction=transaction,selfHeal=selfHeal,
                 healerGeneration=healer.generation,healerLifecycle=healer.lifecycleSequence,damageSequence=healer.damageSequence,
                 targetGeneration=target.generation,targetLifecycle=target.lifecycleSequence,item=itemId});
             return transaction;
@@ -1549,7 +1575,9 @@ namespace Remains.Networking
             else foreach(var part in tickComposer.Consumed) WorldChanges.Unmark(ServerWorld,part);
             foreach(var part in tickComposer.MotionConsumed) WorldChanges.UnmarkMotion(ServerWorld,part);
             if(slow) WorldChanges.RetainMotion(ServerWorld,ServerWorld.actors);
-            if(tick==null || tickReady.Count==0) return;
+            if(tick==null) return;
+            if(SharedHostWorld && LocalActorId!=null) PublishSharedHostTick(tick);
+            if(tickReady.Count==0) return;
             using var frameSection=Remains.Diagnostics.FrameHitchLog.Section("Тик мира: отправка");
             byte[] payload=WorldTickSender.Encode(tick);
             int budget=NetworkMessages.MaxContentSize(Channels.Reliable);
@@ -1577,6 +1605,7 @@ namespace Remains.Networking
         public override void LateUpdate()
         {
             base.LateUpdate();
+            FlushLocalHostRequests();
             if(NetworkServer.active && ServerWorld!=null)
             {
                 double now=Time.unscaledTimeAsDouble;
@@ -1584,9 +1613,12 @@ namespace Remains.Networking
                 if(tickPaused.Count>0) ResumeDrainedTicks();
             }
             if(predictions.Count>0 && NetworkClient.active) SettlePredictions(Time.unscaledTime);
-            if(!commitAtFrameEnd) return;
-            commitAtFrameEnd=false;
-            if(NetworkServer.active && ServerWorld!=null) CommitWorld();
+            if(commitAtFrameEnd)
+            {
+                commitAtFrameEnd=false;
+                if(NetworkServer.active && ServerWorld!=null) CommitWorld();
+            }
+            FlushSharedHostChanged();
         }
         private void ResumeDrainedTicks()
         {
@@ -1633,6 +1665,7 @@ namespace Remains.Networking
         }
         public override void OnStopClient()
         {
+            ResetHostWorldBuffers();
             recoil?.Clear();
             selfHealing.Reset();
             CharacterContent.Reset();ModMismatch?.Invoke(null);

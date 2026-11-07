@@ -152,6 +152,7 @@ namespace Remains.Runtime
             // Mirror configures headless frame rate during StartClient/StartHost.
             // Apply the requested probe limit after that, including reconnections.
             if(Options.Smoke!=null) Session.ClientReady+=()=>Application.targetFrameRate=Options.ProbeFrameRate;
+            Session.ConfigureHostSelfTicks(Options.HostSelfTicks);
             Session.ConfigureRules(WeaponCatalog.Rules);
             Session.UseLobby=Options.Smoke==null || Options.Smoke.StartsWith("lobby") || Options.Smoke.StartsWith("duplicate-lobby") || Options.Smoke.StartsWith("protocol") || Options.Smoke.StartsWith("grenade-resume-"); Session.autoCreatePlayer=false; Session.maxConnections=Options.Capacity;
             Session.CharacterId=Options.Character;
@@ -193,6 +194,7 @@ namespace Remains.Runtime
             visualLayers=new ActorVisualLayers(transform,visualOrders);
             var interactionVisuals=CreateOwnedObject("Визуальные взаимодействия").AddComponent<InteractionVisuals>();
             interactionVisuals.Initialize(Session,Interactions,Grenades,Geometry,visualLayers,Combat.Reload);
+            interactionVisuals.PresentationActor=PresentActor;
             actorShadows=new ActorShadowPresentation(this,transform);
             FireVisuals fireVisuals=null;
             interactionVisuals.ConfigureMuzzleLighting(emissions=>
@@ -215,7 +217,7 @@ namespace Remains.Runtime
             });
             heldAppearance=CreateOwnedObject("Цвет удерживаемых предметов").AddComponent<HeldPropGlowPresentation>();
             heldAppearance.Initialize(Session,interactionVisuals,ponyMagic);
-            HeldItems=CreateOwnedObject("Удерживаемые вещи").AddComponent<HeldItemVisuals>();HeldItems.Initialize(Session,visualLayers);
+            HeldItems=CreateOwnedObject("Удерживаемые вещи").AddComponent<HeldItemVisuals>();HeldItems.Initialize(Session,visualLayers);HeldItems.PresentationActor=PresentActor;
             var room=RoomLayout.Load(shownLevel);
             movement=CreateMovement(room);
             npcs=new NpcController(Session,Geometry,Combat);
@@ -515,6 +517,7 @@ namespace Remains.Runtime
             foreach(var visual in visuals.Values) visual.ApplyHeldAppearance(colors);
             actorVisualWorld=world.worldId;actorVisualLevel=visible;
         }
+        private ActorState PresentActor(ActorState actor)=>Session.SharedHostWorld?remoteMotion.Presentation(actor):actor;
         private string actorVisualWorld,actorVisualLevel;
         private void RefreshActorVisual(string id,ActorState actor,string visibleLevel)
         {
@@ -531,6 +534,7 @@ namespace Remains.Runtime
                 if(visual is AtlasActorVisual atlas) atlas.ConfigureVisibleArea(actorActivity.InVisibleArea);
             }
             if(visual is PonyVisual pony) pony.ConfigureMagicSource(ponyMagic);
+            visual.ConfigurePresentationProjection(Session.SharedHostWorld?remoteMotion.Presentation:null);
             visual.Bind(actor);visual.SetVisible(true);
         }
         private void BindEntryPresentation(IRoomLighting lighting,RoomLayout room,bool pending)
@@ -581,6 +585,8 @@ namespace Remains.Runtime
             using var frameSection=Remains.Diagnostics.FrameHitchLog.Section("PrototypeRuntime.Update");
             if(roomFailurePending) return;
             using(Remains.Diagnostics.FrameHitchLog.Section("Сохранения: очередь")) Session.PumpSaveWrites();
+            // Server messages handled in NetworkEarlyUpdate may add a level or actor before this simulation step.
+            Session.FlushSharedHostChanged();
             using(Remains.Diagnostics.FrameHitchLog.Section("Сессия: шаги служб"))
             {
             Session.Admission.Step();Session.Travel.Step();Session.Lobby.Step();Session.Pause.Step();Session.Deposits.Step();Session.ActorHolds.Step();
@@ -601,12 +607,12 @@ namespace Remains.Runtime
             if(actor.level!=hitchLevel || Session.World.props.Count!=hitchProps)
             {
                 hitchLevel=actor.level;hitchProps=Session.World.props.Count;
-                Remains.Diagnostics.FrameHitchLog.Context=$"уровень {actor.level}, игроков {Session.World.actors.FindAll(a=>a.player && a.connected).Count}, тел {hitchProps}, контейнеров {Session.World.containers.Count}";
+                Remains.Diagnostics.FrameHitchLog.Context=$"{(Session.SharedHostWorld?"хост, один мир":NetworkServer.active?"хост, самоотправка":"клиент")}; уровень {actor.level}, игроков {Session.World.actors.FindAll(a=>a.player && a.connected).Count}, тел {hitchProps}, контейнеров {Session.World.containers.Count}";
             }
             // Tops of physical bodies as actor supports, current before any actor moves this frame.
             using(Remains.Diagnostics.FrameHitchLog.Section("Опоры на телах"))
                 foreach(string level in Geometry.LoadedLevels) BodyTopSurfaces.Update(Geometry.Get(level),Session.World,level);
-            using(Remains.Diagnostics.FrameHitchLog.Section("Удалённое движение")) remoteMotion.Step(Session.World,Session.LocalOwner,Time.deltaTime,Session.Pause.IsPaused,Time.unscaledTimeAsDouble,true);
+            using(Remains.Diagnostics.FrameHitchLog.Section("Удалённое движение")) remoteMotion.Step(Session.World,Session.LocalOwner,Time.deltaTime,Session.Pause.IsPaused,Time.unscaledTimeAsDouble,true,Session.SharedHostWorld);
             using(Remains.Diagnostics.FrameHitchLog.Section("Актёры: активность"))
             {actorActivity.Refresh(Session.World);
             actorActivity.SetVisibleArea(actor.level,cameraFollower.AnimationArea(actor));}
@@ -622,7 +628,7 @@ namespace Remains.Runtime
             foreach(var animated in Session.World.actors)
             {
                 if(animated.owner==Session.LocalOwner) animated.poseCorrectionRemaining=0;
-                if(actorActivity.Active(animated) && !Session.Pause.IsPaused(animated.level) &&
+                if((!Session.SharedHostWorld || animated.owner==Session.LocalOwner) && actorActivity.Active(animated) && !Session.Pause.IsPaused(animated.level) &&
                     !remoteMotion.ControlsPosePhase(animated))
                 {
                     if(animated.owner==Session.LocalOwner) actorActivity.ObserveSimulation(animated);

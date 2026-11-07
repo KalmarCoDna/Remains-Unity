@@ -6,6 +6,7 @@ using UnityEngine;
 
 namespace Remains.Presentation
 {
+    [DefaultExecutionOrder(1000)] // Read the same completed runtime projection as weapon/item visuals.
     public sealed class AtlasActorVisual : ActorVisual
     {
         private const float InvertedLift=.8f;
@@ -148,6 +149,12 @@ namespace Remains.Presentation
             if(!hidden) Draw();
         }
         public void Draw()
+        {
+            var canonical=state;state=ProjectState(state);
+            try {DrawProjected();}
+            finally {state=canonical;}
+        }
+        private void DrawProjected()
         {
             // A buried zombie is not drawn until it digs out (UnitZombie.animate: vis.visible = false).
             bool hidden=ActorPresence.Hidden(state);

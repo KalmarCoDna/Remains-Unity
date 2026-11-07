@@ -19,7 +19,7 @@ namespace Remains.Networking
         public bool Pending=>requests.Count>0;
         public event Action Reconciled;
         public SessionDeposits(CoopSession session) {this.session=session;session.Changed+=Reconcile;}
-        public void RegisterServer() {replies.Clear();NetworkServer.RegisterHandler<DepositRequest>(Remains.Networking.MessageTiming.Server<DepositRequest>(Receive));}
+        public void RegisterServer() {replies.Clear();session.RegisterServerHandler<DepositRequest>(Remains.Networking.MessageTiming.Server<DepositRequest>(Receive));}
         public void RegisterClient()
         {
             requests.Clear();
@@ -66,7 +66,7 @@ namespace Remains.Networking
             request.generation=actor.generation;request.lifecycle=actor.lifecycleSequence;request.level=actor.level;request.selectionRevision=actor.weaponSelectionRevision;
             // Publish prior client debits before the reservation on the same reliable channel.
             session.PublishActor(actor);requests.Add(request.transaction,request);Reconcile();
-            NetworkClient.Send(request);nextRetry=Time.unscaledTime+2;
+            session.SendToServer(request);nextRetry=Time.unscaledTime+2;
             session.ShowNotice(request.toss?"Бросаем предмет… Количество зарезервировано.":
                 "Внесение ожидает сохранения копий мира. Количество зарезервировано.");return true;
         }
@@ -74,7 +74,7 @@ namespace Remains.Networking
         {
             if(!NetworkClient.isConnected || requests.Count==0 || Time.unscaledTime<nextRetry) return;
             nextRetry=Time.unscaledTime+2;
-            foreach(var request in requests.Values) NetworkClient.Send(request);
+            foreach(var request in requests.Values) session.SendToServer(request);
         }
         private void Reconcile()=>Reconcile(false);
         private void Reconcile(bool forceNotification)
@@ -97,6 +97,22 @@ namespace Remains.Networking
             Reconciled?.Invoke();
         }
         private void Receive(NetworkConnectionToClient connection,DepositRequest request)
+        {
+            var actor=session.ConnectedActor(connection);
+            if(!session.IsSharedHostConnection(connection) || actor==null || !requests.TryGetValue(request.transaction,out var local))
+            {ReceiveAuthority(connection,request);return;}
+            // The UI reservation lives on the shared actor. Exclude this request's own reservation while its
+            // authoritative debit is validated; other queued requests remain reserved and remote checks are unchanged.
+            string item=InventoryStacks.ResolveId(actor.inventoryAliases,local.item);
+            if(actor.inventoryReservations.TryGetValue(item,out int held))
+            {
+                int remaining=held-local.quantity;
+                if(remaining>0) actor.inventoryReservations[item]=remaining;else actor.inventoryReservations.Remove(item);
+            }
+            try {ReceiveAuthority(connection,request);}
+            finally {Reconcile();}
+        }
+        private void ReceiveAuthority(NetworkConnectionToClient connection,DepositRequest request)
         {
             var actor=session.ConnectedActor(connection);if(actor==null) return;
             string key=actor.id+":"+request.transaction;
