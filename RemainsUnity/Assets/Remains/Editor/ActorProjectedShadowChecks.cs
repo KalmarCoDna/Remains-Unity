@@ -83,17 +83,13 @@ namespace Remains.Editor
             PropCatalog.Load();var artwork=new PropArtwork();
             var wood=PropCatalog.Get("woodbox");var ammo=PropCatalog.Get("ammobox");
             var stack=new[]{(wood,Vector2.zero),(wood,new Vector2(.08f,wood.height)),(ammo,new Vector2(.16f,2*wood.height))};
-            Vector2 start=default;
-            for(float y=1;y<layout.top-2*wood.height-ammo.height && start==default;y++)
-                for(float x=4;x<layout.right-3 && start==default;x++)
-                {
-                    var at=new Vector2(x,y);
-                    var from=at+new Vector2(-2,wood.height);
-                    if(stack.All(item=>level.ActorShadowTransmission(at+item.Item2+Vector2.up*item.Item1.height*.5f,from)>.5f))
-                        start=at;
-                }
-            if(start==default)throw new InvalidOperationException("Нет свободной области хаба для стопки.");
-            var fromLight=start+new Vector2(-2,wood.height);
+            // The hub checks ran above. Isolate the stack in a clear optical area so no
+            // existing wall masks one of the three independently drawn game sprites.
+            var shadowSources=(ActorShadowSources)typeof(FactoryLevelView)
+                .GetField("shadowSources",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(level);
+            shadowSources.Configure(new float[120,90],Vector2.zero,.1f,Matrix4x4.identity,Array.Empty<ActorShadowSource>(),0);
+            var start=new Vector2(5,2);
+            var fromLight=start+new Vector2(-2,2*wood.height+ammo.height+.4f);
             level.SetViewArea(new Rect(start-new Vector2(4,1),new Vector2(8,6)));
             var bodies=new PropView[stack.Length];
             for(int i=0;i<bodies.Length;i++)
