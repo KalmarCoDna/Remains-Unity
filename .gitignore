@@ -27,6 +27,7 @@
 **/.idea/
 **/.vscode/
 **/*.csproj
+!RemainsUnity/Tests/AudioDsp/AudioDsp.csproj
 **/*.sln
 **/*.slnx
 **/*.suo
