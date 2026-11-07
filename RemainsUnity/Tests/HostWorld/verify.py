@@ -5,10 +5,12 @@ import argparse, datetime, hashlib, json, os, pathlib, subprocess, time
 p=argparse.ArgumentParser()
 p.add_argument('--player',required=True,type=pathlib.Path)
 p.add_argument('--output',required=True,type=pathlib.Path)
-p.add_argument('--modes',nargs='+',choices=['on','off'],default=['on','off'])
+p.add_argument('--modes',nargs='+',choices=['on','off','default'],default=['on','off'])
 p.add_argument('--scenarios',nargs='+',default=['appearance','door','melee','grenade','revival','telekinesis','telekinesis-container','telekinesis-pause','projectile-handoff','npc','container','pause','prop-body','shortcuts'])
 p.add_argument('--port',type=int,default=19440)
+p.add_argument('--expect-default',choices=['on','off'])
 p.add_argument('--timeout',type=int,default=180)
+p.add_argument('--windowed',action='store_true',help='Use a normal graphical window (Linux batchmode can expose startup 640x480)')
 a=p.parse_args();a.player=a.player.resolve();a.output=a.output.resolve();a.output.mkdir(parents=True,exist_ok=True)
 if not a.player.is_file():p.error('Player does not exist')
 if os.name=='posix' and not os.environ.get('DISPLAY') and not os.environ.get('WAYLAND_DISPLAY'):p.error('Graphical Player requires DISPLAY or WAYLAND_DISPLAY')
@@ -27,7 +29,10 @@ for mode in a.modes:
     probe=scenario+'-'+role
     if scenario in ['contact-audio-props','contact-audio-targets','prop-body','door','shortcuts']:
      probe=scenario.replace('contact-audio-','contact-audio-frames-')+'-'+role if scenario.startswith('contact-audio-') else scenario+'-frames-'+role
-    command=[str(a.player),'-batchmode','-force-glcore','-job-worker-count','2','-screen-width','1920','-screen-height','1080','-screen-fullscreen','0','-logFile',str(directory/(role+'.log')),'--role',role,'--character',character,'--save-dir',str(directory/(role+'-save')),'--smoke',probe,'--probe-peers','2','--probe-fps','60','--report',str(report),'--port',str(port),'--host-self-ticks',mode]
+    width,height=(1920,1080) if scenario.startswith('contact-audio-') or scenario=='prop-body' else (1280,720)
+    command=[str(a.player),'-force-glcore','-job-worker-count','2','-screen-width',str(width),'-screen-height',str(height),'-screen-fullscreen','0','-logFile',str(directory/(role+'.log')),'--role',role,'--character',character,'--save-dir',str(directory/(role+'-save')),'--smoke',probe,'--probe-peers','2','--probe-fps','60','--report',str(report),'--port',str(port)]
+    if not a.windowed:command.insert(1,'-batchmode')
+    if mode!='default':command+=['--host-self-ticks',mode]
     (directory/(role+'-command.json')).write_text(json.dumps(command,ensure_ascii=False,indent=2))
     stream=(directory/(role+'-stdout.log')).open('w');streams.append(stream)
     processes.append(subprocess.Popen(command,stdout=stream,stderr=subprocess.STDOUT))
@@ -44,8 +49,10 @@ for mode in a.modes:
     data=json.loads(report.read_text()) if report.exists() else {'success':False,'detail':'Missing report'}
     data.update(role=role,exit_code=process.returncode)
     results.append(data)
-   passed=all(r.get('success') and r['exit_code']==0 for r in results)
-   result={'mode':mode,'scenario':scenario,'success':passed,'directory':str(directory),'reports':results}
+   host_log=(directory/'host.log').read_text(errors='replace')
+   observed='off' if 'Режим хоста: один мир' in host_log else 'on' if 'Режим хоста: самоотправка' in host_log else 'unknown'
+   passed=all(r.get('success') and r['exit_code']==0 for r in results) and (mode!='default' or not a.expect_default or observed==a.expect_default)
+   result={'mode':mode,'observed_mode':observed,'scenario':scenario,'success':passed,'directory':str(directory),'reports':results}
   except Exception as error:
    result={'mode':mode,'scenario':scenario,'success':False,'error':str(error),'directory':str(directory)}
   finally:
