@@ -47,6 +47,14 @@ namespace Remains.Gameplay
                 var next=due.Min;due.Remove(next);publish(next.id);
             }
         }
+        public void Defer(string id,double now)
+        {
+            if(!sent.TryGetValue(id,out var previous)) return;
+            due.Remove((previous.next,id));
+            previous.next=now+1;
+            sent[id]=previous;
+            due.Add((previous.next,id));
+        }
         private static double Phase(string id)
         {
             uint hash=2166136261;

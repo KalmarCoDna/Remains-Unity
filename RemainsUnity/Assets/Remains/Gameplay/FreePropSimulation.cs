@@ -74,8 +74,9 @@ namespace Remains.Gameplay
         private void PublishCurrentPose(string id)
         {
             var prop=WorldProps.Find(session.World,id);
-            if(prop!=null && prop.owner==session.LocalOwner && prop.movable && prop.hasPhysicalBody && !prop.held && motion.Running(prop.level))
-                publishChanged(prop);
+            if(prop==null || prop.owner!=session.LocalOwner || !prop.movable || !prop.hasPhysicalBody) return;
+            if(prop.held || !motion.Running(prop.level)) {poses.Defer(id,publishTime);return;}
+            publishChanged(prop);
         }
     }
 }

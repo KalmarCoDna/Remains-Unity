@@ -91,6 +91,15 @@ namespace Remains.Editor
             });
             cadence.PublishDue(1.99,_=>heartbeats++);
             Require(heartbeats==1,"Повтор позы прошёл раньше срока или не попал в очередь.");
+            cadence.PublishDue(2,id=>cadence.Defer(id,2));
+            cadence.PublishDue(2.99,_=>heartbeats++);
+            cadence.PublishDue(3,id=>
+            {
+                Require(id==upper.id && cadence.ShouldPublish(upper,3,out bool changed) && !changed,
+                    "После паузы повтор потерял позу или изменил её версию.");
+                heartbeats++;
+            });
+            Require(heartbeats==2,"Отложенный повтор позы не вернулся в очередь.");
             var notify=typeof(FreePropMotionContext).GetMethod("ExternalMotion",
                 System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic);
             Require(notify!=null,"Не найден вход изменения сетевой позы.");
