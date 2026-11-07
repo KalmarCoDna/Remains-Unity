@@ -12,7 +12,8 @@ namespace Remains.Gameplay
             Func<string,bool> isPaused,Action<PropState> publish=null,PassengerMotionRegistry passengers=null)
             =>Step(world,localOwner,dt,roomForLevel,isPaused,publish,passengers,new FreePropMotionContext());
         public static int Step(WorldState world,string localOwner,float dt,Func<string,RoomLayout> roomForLevel,
-            Func<string,bool> isPaused,Action<PropState> publish,PassengerMotionRegistry passengers,FreePropMotionContext context)
+            Func<string,bool> isPaused,Action<PropState> publish,PassengerMotionRegistry passengers,FreePropMotionContext context,
+            Action<PropState,Vector2> moved=null)
         {
             if(world==null || dt<=0) return 0;
             if(string.IsNullOrEmpty(localOwner)) throw new ArgumentException("Не задан владелец симуляции свободных объектов.",nameof(localOwner));
@@ -36,6 +37,7 @@ namespace Remains.Gameplay
                     context.ImpactSources.Add((prop,prop.Position,new Vector2(prop.vx,prop.vy)));
                 context.Support.Moved(prop,previousX);
                 context.Settle(prop,room,previousX,previousY,passenger);
+                moved?.Invoke(prop,new Vector2(previousX,previousY));
                 stepped++;
                 publish?.Invoke(prop);
             }
@@ -86,12 +88,14 @@ namespace Remains.Gameplay
 
         // Wakes sleepers that may rest on this body: overlapping it horizontally, with feet at or above its lowest top.
         internal void WakeAbove(PropState mover,float lowestY)
+            =>WakeAbove(mover,lowestY,mover.x);
+        private void WakeAbove(PropState mover,float lowestY,float x)
         {
             float top=lowestY-mover.anchorHeight+mover.height-.05f;
-            foreach(var other in Support.Near(mover,mover.x))
+            foreach(var other in Support.Near(mover,x))
             {
                 if(ReferenceEquals(other,mover) || !rest.TryGetValue(other,out var state) || !state.asleep) continue;
-                if(Mathf.Abs(other.x-mover.x)>=(other.width+mover.width)*.5f) continue;
+                if(Mathf.Abs(other.x-x)>=(other.width+mover.width)*.5f) continue;
                 if(other.y-other.anchorHeight<top) continue;
                 state.asleep=false;state.still=0;
             }
@@ -99,19 +103,34 @@ namespace Remains.Gameplay
 
         private readonly Dictionary<string,bool> levels=new(StringComparer.Ordinal);
         private readonly Dictionary<string,RoomLayout> rooms=new(StringComparer.Ordinal);
+        private readonly bool trackSupport;
+        private bool supportDirty=true;
+        public FreePropMotionContext(bool trackSupport=false)=>this.trackSupport=trackSupport;
         internal readonly MovementHull Hull=new();
         internal readonly PropSupportIndex Support=new();
         internal readonly List<(PropState prop,Vector2 position,Vector2 velocity)> ImpactSources=new();
         internal WorldPropView Props {get;private set;}
+        internal void InvalidateSupport()=>supportDirty=true;
+        internal void ExternalMotion(PropState prop,Vector2 previous)
+        {
+            if(!trackSupport || supportDirty || !ReferenceEquals(Support.Find(prop.id),prop)) return;
+            Support.Moved(prop,previous.x);
+            WakeAbove(prop,Mathf.Min(previous.y,prop.y),previous.x);
+        }
         internal void Prepare(WorldState world,Func<string,bool> isPaused)
         {
             ImpactSources.Clear();
-            if(Props?.World!=world) Props=new WorldPropView(world);
+            if(Props?.World!=world) {Props=new WorldPropView(world);supportDirty=true;}
             levels.Clear();rooms.Clear();
             foreach(var actor in world.actors)
                 if(actor.player && actor.connected && !levels.ContainsKey(actor.level)) levels.Add(actor.level,!isPaused(actor.level));
-            // Only running levels' bodies: neighbours are searched on the stepped body's own level.
-            Support.Prepare(Props,Running);
+            // The live index follows changed bodies. A level is still stepped only
+            // while players occupy it, and neighbour queries stay on that level.
+            if(!trackSupport || supportDirty)
+            {
+                Support.Prepare(Props,trackSupport?null:Running);
+                supportDirty=false;
+            }
         }
         internal bool Running(string level)=>levels.TryGetValue(level,out bool running) && running;
         internal RoomLayout Room(string level,Func<string,RoomLayout> read)

@@ -13,11 +13,12 @@ namespace Remains.Gameplay
         private readonly Func<string,bool> isPaused;
         private readonly ReplicationCadence cadence=new(.05);
         private readonly PassengerMotionRegistry passengers=new();
-        private readonly FreePropMotionContext motion=new();
+        private readonly FreePropMotionContext motion=new(trackSupport:true);
         private readonly FreePropPoseCadence poses=new();
         private readonly PropImpactController impacts;
         private readonly Action<PropState> publishChanged;
         private readonly Action<PropState,bool> publishPose;
+        private readonly Action<PropState,Vector2> notifyMotion;
         private string poseWorld;
         private string poseOwner;
         public FreePropSimulation(CoopSession session,SimulationGeometry geometry,InteractionAdapter interactions)
@@ -26,9 +27,15 @@ namespace Remains.Gameplay
             Remains.Content.PropImpactCatalog.Load();impacts=new PropImpactController(session);
             roomForLevel=(geometry??throw new ArgumentNullException(nameof(geometry))).Get;
             publishPose=(interactions??throw new ArgumentNullException(nameof(interactions))).SendProp;
+            notifyMotion=interactions.NotifyPropMotion;
             publishChanged=prop=> {if(poses.ShouldPublish(prop,Time.unscaledTimeAsDouble,out bool changed)) publishPose(prop,changed);};
             isPaused=session.Pause.IsPaused;
-            session.Changed+=()=>passengers.Reconcile(session.World,session.LocalOwner);
+            session.Changed+=()=>
+            {
+                passengers.Reconcile(session.World,session.LocalOwner);
+                if(session.LastChange.Any(WorldChangeKind.Props|WorldChangeKind.Containers)) motion.InvalidateSupport();
+            };
+            interactions.PropMoved+=motion.ExternalMotion;
         }
         public void Step(float delta)
         {
@@ -38,7 +45,7 @@ namespace Remains.Gameplay
             if(poseWorld!=session.World.worldId || poseOwner!=session.LocalOwner)
             {poses.Reset();poseWorld=session.World.worldId;poseOwner=session.LocalOwner;}
             FreePropMotion.Step(session.World,session.LocalOwner,delta,roomForLevel,isPaused,
-                cadence.TryAdvance(Time.unscaledTimeAsDouble)?publishChanged:null,passengers,motion);
+                cadence.TryAdvance(Time.unscaledTimeAsDouble)?publishChanged:null,passengers,motion,notifyMotion);
             using(Remains.Diagnostics.FrameHitchLog.Section("Тела: удары ящиков")) impacts.Step(motion);
         }
     }

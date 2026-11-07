@@ -242,7 +242,7 @@ namespace Remains.Runtime
             GrenadeAudio=CreateOwnedObject("Звуки отскока гранаты").AddComponent<GrenadeImpactAudio>();GrenadeAudio.Initialize(Session,Grenades,Audio);
             CreateOwnedObject("Счётчик Гейгера").AddComponent<GeigerAudio>().Initialize(Session,()=>radiation.LocalDose,Audio);
             MovementAudio=CreateOwnedObject("Звуки движения").AddComponent<MovementAudio>();MovementAudio.Initialize(Session,Geometry,Audio);
-            PropAudio=CreateOwnedObject("Звуки физических объектов").AddComponent<PropContactAudio>();PropAudio.Initialize(Session,Geometry,Audio);
+            PropAudio=CreateOwnedObject("Звуки физических объектов").AddComponent<PropContactAudio>();PropAudio.Initialize(Session,Geometry,Audio,null,Interactions);
             ContainerAudio=CreateOwnedObject("Звуки контейнеров").AddComponent<ContainerOpenAudio>();ContainerAudio.Initialize(Audio);
             ImpactAudio=CreateOwnedObject("Звуки попаданий").AddComponent<ProjectileAudio>();ImpactAudio.Initialize(Combat.Projectiles,Audio);
             CreateOwnedObject("Разрушение ламп").AddComponent<LampBreakEffects>().Initialize(Session,Audio,visualOrders);
@@ -528,6 +528,7 @@ namespace Remains.Runtime
             {
                 using(Remains.Diagnostics.FrameHitchLog.Section("Переход: визуал актёров")) visual=ActorVisualFactory.Create(actor);
                 visuals.Add(id,visual);visualLayers.Attach(id,visual.transform);
+                if(visual is AtlasActorVisual atlas) atlas.ConfigureVisibleArea(actorActivity.InVisibleArea);
             }
             if(visual is PonyVisual pony) pony.ConfigureMagicSource(ponyMagic);
             visual.Bind(actor);visual.SetVisible(true);
