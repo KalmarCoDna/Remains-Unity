@@ -83,6 +83,7 @@ namespace Remains.Gameplay
             if((Frame+state.phase)%VerifyEvery!=0) return true;
             if(trackSupport)
             {
+                if(state.staticSupport && !MovingPlatforms(room)) return true;
                 Hull.width=prop.width;Hull.height=prop.height;
                 var feet=prop.Position-Vector2.up*prop.anchorHeight;
                 if(!PassengerMotion.PreviouslySupported(room,Hull,feet,dt) &&
@@ -130,6 +131,7 @@ namespace Remains.Gameplay
 
         private readonly Dictionary<string,bool> levels=new(StringComparer.Ordinal);
         private readonly Dictionary<string,RoomLayout> rooms=new(StringComparer.Ordinal);
+        private readonly Dictionary<RoomLayout,bool> movingPlatforms=new();
         private readonly bool trackSupport;
         private bool supportDirty=true;
         private string trackedOwner;
@@ -187,7 +189,7 @@ namespace Remains.Gameplay
             ImpactSources.Clear();
             if(Props?.World!=world) {Props=new WorldPropView(world);supportDirty=true;}
             if(trackedOwner!=localOwner) {trackedOwner=localOwner;supportDirty=true;}
-            levels.Clear();rooms.Clear();
+            levels.Clear();rooms.Clear();movingPlatforms.Clear();
             var players=connectedPlayers??world.actors;
             for(int i=0;i<players.Count;i++)
             {
@@ -211,6 +213,18 @@ namespace Remains.Gameplay
                 scheduled.AddRange(schedule.Awake);scheduled.AddRange(schedule.Sleeping[slot]);
             }
             scheduled.Sort(compareOrder);
+        }
+        private bool MovingPlatforms(RoomLayout room)
+        {
+            if(movingPlatforms.TryGetValue(room,out bool moving)) return moving;
+            var frame=room.dynamicSurfaces;
+            for(int i=0;i<(frame?.Count??0);i++)
+            {
+                var pose=frame.Pose(i);
+                if(pose.Continuous && !pose.Delta.Equals(Vector2.zero)) {moving=true;break;}
+            }
+            movingPlatforms.Add(room,moving);
+            return moving;
         }
         private void RebuildSchedule(string localOwner)
         {
