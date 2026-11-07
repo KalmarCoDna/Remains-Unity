@@ -1,0 +1,174 @@
+{
+    "version": "6000.0.39f1",
+    "utc": "2026-11-07T14:33:35.0610780Z",
+    "results": [
+        {
+            "check": "FirearmChecks",
+            "status": "FAIL",
+            "detail": "InvalidOperationException: Огнестрел: определение тянет 4 текстур: weapon:friend:grade:0",
+            "elapsedMs": 495
+        },
+        {
+            "check": "NaturalAttackChecks",
+            "status": "PASS",
+            "detail": "",
+            "elapsedMs": 216
+        },
+        {
+            "check": "NpcAttackChecks",
+            "status": "PASS",
+            "detail": "",
+            "elapsedMs": 19
+        },
+        {
+            "check": "PlayerStrikeAnimationChecks",
+            "status": "FAIL",
+            "detail": "InvalidDataException: Нет выгруженных полных ударов оригинала: /workspace/tasks/pt32/.reference/original/pony-extra/pony-extra.json",
+            "elapsedMs": 567
+        },
+        {
+            "check": "FireChecks",
+            "status": "PASS",
+            "detail": "",
+            "elapsedMs": 434
+        },
+        {
+            "check": "GrenadeChecks",
+            "status": "FAIL",
+            "detail": "InvalidOperationException: Качество векторных ресурсов: Нет манифеста экспорта: Tools/Research/ItemHubVectorReserve66/manifest.json",
+            "elapsedMs": 3
+        },
+        {
+            "check": "GrenadeAimChecks",
+            "status": "PASS",
+            "detail": "",
+            "elapsedMs": 395
+        },
+        {
+            "check": "RevivalChecks",
+            "status": "PASS",
+            "detail": "",
+            "elapsedMs": 75
+        },
+        {
+            "check": "LadderHoldChecks",
+            "status": "FAIL",
+            "detail": "InvalidOperationException: Графика пони отсутствует или устарела. Выполните Remains → Пересобрать графику пони.",
+            "elapsedMs": 882
+        },
+        {
+            "check": "LadderEntryPoseChecks",
+            "status": "FAIL",
+            "detail": "InvalidOperationException: Графика пони отсутствует или устарела. Выполните Remains → Пересобрать графику пони.",
+            "elapsedMs": 412
+        },
+        {
+            "check": "LadderPoseContactChecks",
+            "status": "FAIL",
+            "detail": "InvalidOperationException: Графика пони отсутствует или устарела. Выполните Remains → Пересобрать графику пони.",
+            "elapsedMs": 914
+        },
+        {
+            "check": "FactoryLadderLandingChecks",
+            "status": "FAIL",
+            "detail": "DirectoryNotFoundException: Could not find a part of the path \"/workspace/tasks/pt32/Tools/Research/FactoryWarehouse40/source-room.json\".",
+            "elapsedMs": 1077
+        },
+        {
+            "check": "JumpPoseChecks",
+            "status": "FAIL",
+            "detail": "InvalidOperationException: Графика пони отсутствует или устарела. Выполните Remains → Пересобрать графику пони.",
+            "elapsedMs": 80
+        },
+        {
+            "check": "VariableJumpChecks",
+            "status": "PASS",
+            "detail": "",
+            "elapsedMs": 4
+        },
+        {
+            "check": "StandingEdgePoseChecks",
+            "status": "FAIL",
+            "detail": "InvalidOperationException: Графика пони отсутствует или устарела. Выполните Remains → Пересобрать графику пони.",
+            "elapsedMs": 420
+        },
+        {
+            "check": "StandingSupportPoseChecks",
+            "status": "FAIL",
+            "detail": "InvalidOperationException: Графика пони отсутствует или устарела. Выполните Remains → Пересобрать графику пони.",
+            "elapsedMs": 222
+        },
+        {
+            "check": "ActorBodySupportChecks",
+            "status": "PASS",
+            "detail": "",
+            "elapsedMs": 383
+        },
+        {
+            "check": "FootSupportContentChecks",
+            "status": "FAIL",
+            "detail": "InvalidOperationException: Нет замороженного растра опоры пони: texture=3, ожидался /workspace/tasks/pt32/Tools/Research/PonyContactSource/3.png. Опора меряется только по объявленным копытам.",
+            "elapsedMs": 288
+        },
+        {
+            "check": "WeaponRecoilMotionChecks",
+            "status": "PASS",
+            "detail": "",
+            "elapsedMs": 19
+        },
+        {
+            "check": "RemoteActorMotionChecks",
+            "status": "PASS",
+            "detail": "",
+            "elapsedMs": 70
+        },
+        {
+            "check": "FreePropMotionChecks",
+            "status": "PASS",
+            "detail": "",
+            "elapsedMs": 20
+        },
+        {
+            "check": "LevelPauseChecks",
+            "status": "PASS",
+            "detail": "",
+            "elapsedMs": 5
+        },
+        {
+            "check": "ProjectilePathChecks",
+            "status": "PASS",
+            "detail": "",
+            "elapsedMs": 2
+        },
+        {
+            "check": "ProjectilePersistenceChecks",
+            "status": "PASS",
+            "detail": "",
+            "elapsedMs": 55
+        },
+        {
+            "check": "ProjectileControllerChecks",
+            "status": "PASS",
+            "detail": "",
+            "elapsedMs": 51
+        },
+        {
+            "check": "LocalProjectileChecks",
+            "status": "PASS",
+            "detail": "",
+            "elapsedMs": 845
+        },
+        {
+            "check": "PonyStrikeChecks",
+            "status": "PASS",
+            "detail": "",
+            "elapsedMs": 529
+        },
+        {
+            "check": "BedRestChecks",
+            "status": "PASS",
+            "detail": "",
+            "elapsedMs": 184
+        }
+    ]
+}
