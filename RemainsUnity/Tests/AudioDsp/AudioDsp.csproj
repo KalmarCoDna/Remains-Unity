@@ -3,7 +3,9 @@
 <ItemGroup>
 <Compile Include="Program.cs"/><Compile Include="Shims.cs"/>
 <Compile Include="../../Assets/Remains/Presentation/AudioDspBuffer.cs" Link="AudioDspBuffer.cs"/>
+<Compile Include="../../Assets/Remains/Presentation/AudioLoopResume.cs" Link="AudioLoopResume.cs"/>
 <Compile Include="../../Assets/Remains/Presentation/AudioPreferences.cs" Link="AudioPreferences.cs"/>
+<Compile Include="../../Assets/Remains/Editor/AudioDspLoopChecks.cs" Link="AudioDspLoopChecks.cs"/>
 <Reference Include="Newtonsoft.Json"><HintPath>$(UnityEditorRoot)/Data/Managed/Newtonsoft.Json.dll</HintPath></Reference>
 </ItemGroup>
 </Project>
