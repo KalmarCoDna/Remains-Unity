@@ -1,0 +1,5 @@
+# Ladder entry missing-data fixture
+
+Depends on fix/pony-head-cross-platform-hash for Linux visual checks. On current runtime an anatomy without visible foot contacts intentionally uses the ordinary climb pose (atlas raiders); LadderEntryPoseChecks still expected this valid profile to throw. This branch changes only that expectation, adding an explicit check that the profile declares no contacts and chooses climb. The following missing-entry-pose assertion still requires a contextual error for the pony profile which does have contacts. No runtime rule changed.
+
+Baseline after the Linux hash fix: “Вход лестницы молча заменил отсутствующие данные”, exit1. Corrected full native LadderEntryPoseChecks.Run: PASS, exit0, Unity6000.0.39f1/OpenGLCore/llvmpipe. Covers Up→stop, Up→Down, Up→jump, actual four contacts and PonyVisual, 30/60/144 Hz/both facings, held phase/save restore, beam/ceiling and position recovery, plus missing required pose. Trace saved under .reference/tests/ladder-entry/commands.csv. Logs: linux-motion-headhash-fixed.log and ladder-entry-data-fixed.log in /workspace/scratch.
