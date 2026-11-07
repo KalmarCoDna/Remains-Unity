@@ -24,7 +24,7 @@ namespace Remains.Networking
                 session.RegisterServerHandler<ThrowRequest>(Remains.Networking.MessageTiming.Server<ThrowRequest>(Throw));
                 session.RegisterServerHandler<DebugGrantRequest>(Remains.Networking.MessageTiming.Server<DebugGrantRequest>(DebugGrant));
                 session.RegisterServerHandler<GrenadePoseMessage>(Remains.Networking.MessageTiming.Server<GrenadePoseMessage>(GrenadePose));
-                NetworkServer.RegisterHandler<GrenadeHoldRequest>(Remains.Networking.MessageTiming.Server<GrenadeHoldRequest>(GrenadeHold));
+                session.RegisterServerHandler<GrenadeHoldRequest>(Remains.Networking.MessageTiming.Server<GrenadeHoldRequest>(GrenadeHold));
             };
             session.ClientReady+=()=>
             {
@@ -156,7 +156,7 @@ namespace Remains.Networking
         {
             var actor=session.LocalActor;
             if(actor==null || !NetworkClient.isConnected) return;
-            NetworkClient.Send(new GrenadeHoldRequest {grenade=id,generation=generation,actorGeneration=actor.generation,
+            session.SendToServer(new GrenadeHoldRequest {grenade=id,generation=generation,actorGeneration=actor.generation,
                 actorLifecycle=actor.lifecycleSequence,release=release});
         }
         private static void Apply(GrenadeState state,GrenadePoseMessage message)
