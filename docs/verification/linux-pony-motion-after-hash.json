@@ -1,0 +1,42 @@
+{
+    "version": "6000.0.39f1",
+    "utc": "2026-11-07T14:38:17.1601560Z",
+    "results": [
+        {
+            "check": "LadderHoldChecks",
+            "status": "FAIL",
+            "detail": "InvalidOperationException: Контакт ног лестницы: Проверяемый ресурс изменился: пересмотрите полноту декларации копыт",
+            "elapsedMs": 4722
+        },
+        {
+            "check": "LadderEntryPoseChecks",
+            "status": "FAIL",
+            "detail": "InvalidOperationException: Вход лестницы молча заменил отсутствующие данные.",
+            "elapsedMs": 340
+        },
+        {
+            "check": "LadderPoseContactChecks",
+            "status": "FAIL",
+            "detail": "InvalidOperationException: Контакт ног лестницы: Проверяемый ресурс изменился: пересмотрите полноту декларации копыт",
+            "elapsedMs": 239
+        },
+        {
+            "check": "JumpPoseChecks",
+            "status": "PASS",
+            "detail": "",
+            "elapsedMs": 55
+        },
+        {
+            "check": "StandingEdgePoseChecks",
+            "status": "PASS",
+            "detail": "",
+            "elapsedMs": 146
+        },
+        {
+            "check": "StandingSupportPoseChecks",
+            "status": "PASS",
+            "detail": "",
+            "elapsedMs": 134
+        }
+    ]
+}
