@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using Remains.Content;
 using Remains.Domain;
 using Remains.Presentation;
 using UnityEditor;
@@ -13,6 +14,7 @@ namespace Remains.Editor
 {
     public static class ActorProjectedShadowChecks
     {
+        public static void Run()=>RunTimingChecks();
         public static void RunTimingBatch()
         {
             try {RunTimingChecks();EditorApplication.Exit(0);}
@@ -46,7 +48,7 @@ namespace Remains.Editor
                 presentation.PrepareFlash(level,actors,weapons,id,flash);
                 var entries=(System.Collections.IDictionary)typeof(ActorShadowPresentation)
                     .GetField("entries",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(presentation);
-                object entry=entries["timing"];
+                object entry=entries[(WorldVisualKind.Actor,"timing")];
                 entry.GetType().GetField("Queued").SetValue(entry,true);
                 presentation.Present(level,actors,weapons,new[]{flash},new[]{id});
                 var sources=(List<ActorShadowSource>)entry.GetType().GetField("Sources").GetValue(entry);
@@ -65,6 +67,7 @@ namespace Remains.Editor
                 ActorShadowPresentation.BlendLampSources(display,new[]{new ActorShadowSource("new",new Vector2(3,1),.1f,.5f)},.01f);
                 if(Mathf.Abs(display[0].Position.x-1.25f)>.0001f)
                     throw new InvalidOperationException("Эффективный центр частично видимой лампы меняется скачком.");
+                CheckBodyStack(level,layout,weapons,presentation,sprite);
                 Debug.Log("Время проекции тени: PASS — первый кадр вспышки виден при queued static, лампы плавно сменяются по ID.");
             }
             finally
@@ -73,6 +76,60 @@ namespace Remains.Editor
                 foreach(var obj in new UnityEngine.Object[]{actorObject,runnerObject,room,sprite,texture})
                     if(obj!=null) UnityEngine.Object.DestroyImmediate(obj);
             }
+        }
+        private static void CheckBodyStack(FactoryLevelView level,RoomLayout layout,InteractionVisuals visuals,
+            ActorShadowPresentation presentation,Sprite flashSprite)
+        {
+            PropCatalog.Load();var artwork=new PropArtwork();
+            var wood=PropCatalog.Get("woodbox");var ammo=PropCatalog.Get("ammobox");
+            var stack=new[]{(wood,Vector2.zero),(wood,new Vector2(.08f,wood.height)),(ammo,new Vector2(.16f,2*wood.height))};
+            Vector2 start=default;
+            for(float y=1;y<layout.top-2*wood.height-ammo.height && start==default;y++)
+                for(float x=4;x<layout.right-3 && start==default;x++)
+                {
+                    var at=new Vector2(x,y);
+                    var from=at+new Vector2(-2,wood.height);
+                    if(stack.All(item=>level.ActorShadowTransmission(at+item.Item2+Vector2.up*item.Item1.height*.5f,from)>.5f))
+                        start=at;
+                }
+            if(start==default)throw new InvalidOperationException("Нет свободной области хаба для стопки.");
+            var fromLight=start+new Vector2(-2,wood.height);
+            level.SetViewArea(new Rect(start-new Vector2(4,1),new Vector2(8,6)));
+            var bodies=new PropView[stack.Length];
+            for(int i=0;i<bodies.Length;i++)
+            {
+                var (definition,offset)=stack[i];string id="stack-"+i;
+                Vector2 position=start+offset;
+                var view=artwork.CreateView(definition.id,id,definition.width);
+                view.transform.SetParent(visuals.transform);
+                view.DrawMotion(new PropState{id=id,definition=definition.id,level=layout.id,x=position.x,y=position.y,
+                    width=definition.width,height=definition.height},"local",false,0);
+                var field=typeof(InteractionVisuals).GetField(i==2?"containers":"props",BindingFlags.Instance|BindingFlags.NonPublic);
+                ((Dictionary<string,PropView>)field.GetValue(visuals)).Add(id,view);bodies[i]=view;
+            }
+            var actors=new Dictionary<string,ActorVisual>();
+            var flash=new SpriteEmission(flashSprite,Matrix4x4.Translate(fromLight),8);
+            const string light="flash:crate-stack";
+            var emissions=new[]{flash};var ids=new[]{light};
+            presentation.PrepareFlash(level,actors,visuals,light,flash);
+            presentation.Present(level,actors,visuals,emissions,ids);
+            var masks=new List<ProjectedLightShadow>();presentation.CollectProjectedLightShadows(masks);
+            if(masks.Count!=3 || masks.Any(mask=>mask.SourceId!=light || mask.Opacity<=0))
+                throw new InvalidOperationException($"Для двух деревянных и одного ящика боеприпасов получено {masks.Count} теней.");
+            for(int i=0;i<masks.Count;i++)
+                if(masks[i].WorldBounds.center.x<=bodies[i].Artwork.bounds.center.x+.05f)
+                    throw new InvalidOperationException("Проекция ящика не направлена от источника.");
+            if(!masks[0].WorldBounds.Overlaps(masks[1].WorldBounds) || !masks[1].WorldBounds.Overlaps(masks[2].WorldBounds))
+                throw new InvalidOperationException("Стопка не проверяет перекрывающиеся проекции.");
+            var original=masks.ToArray();
+            presentation.Present(level,actors,visuals,emissions,ids);presentation.CollectProjectedLightShadows(masks);
+            if(!masks.Select(mask=>mask.Revision).SequenceEqual(original.Select(mask=>mask.Revision)))
+                throw new InvalidOperationException("Неподвижная стопка перестроила маски.");
+            bodies[2].SetVisible(false);
+            presentation.Present(level,actors,visuals,emissions,ids);presentation.CollectProjectedLightShadows(masks);
+            if(masks.Count!=2 || masks.Any(mask=>mask.Mask==original[2].Mask))
+                throw new InvalidOperationException("Скрытый ящик оставил проекцию.");
+            Debug.Log($"Object projected shadows PASS: two woodbox props and ammobox container, source {fromLight}, overlap, cache and visibility.");
         }
         // Incremental player delivery after the full PrototypeBuild/ContractChecks
         // succeeded, for a final scoped shadow-only correction; not a substitute for admission.
