@@ -7,6 +7,7 @@ using Remains.Content;
 using Remains.Domain;
 using Remains.Gameplay;
 using Remains.Networking;
+using Remains.Persistence;
 using Remains.Presentation;
 using UnityEngine;
 
@@ -19,7 +20,7 @@ namespace Remains.Runtime
         private PrototypeRuntime runtime;
         private int phase,explosions;
         private float deadline,returnAt,settledAt;
-        private bool threw,disconnected,returned,finished,handoff,startRequested;
+        private bool threw,disconnected,returned,finished,handoff,startRequested,checkpointSaved;
         private string grenadeId;
         private float heldAt;
         private Vector2 plannedOrigin;
@@ -200,12 +201,10 @@ namespace Remains.Runtime
             if(active!=null)
             {
                 grenadeId=active.id;
-                if(active.generation>1 && !Remains.Domain.ActorPresence.IsPresent(session.ServerWorld.Find("player:session-client-1")))
+                if(active.generation>1 && active.owner==session.LocalOwner && !ActorPresence.IsPresent(session.ServerWorld.Find("player:session-client-1")))
                 {
                     handoff=true;
-                    // Exact canonical checkpoint, captured while the fuse is still live.
-                    string proof=runtime.Options.Report+".active-world.json";
-                    if(!File.Exists(proof)) File.WriteAllText(proof,session.Saves.SelectedSnapshot().Json);
+                    if(!checkpointSaved) CaptureActiveCheckpoint(session.ServerWorld);
                 }
             }
             if(!handoff || session.World.grenades.Count!=0 || session.World.explosions.Count!=1 ||
@@ -217,10 +216,27 @@ namespace Remains.Runtime
                 phase=2;NetworkServer.SendToAll(new GrenadeProbeFinish());
             }
         }
+        private void CaptureActiveCheckpoint(WorldState world)
+        {
+            // The runner can resume this directory. Using final character profiles with an
+            // earlier world would import already applied damage into the restored hub.
+            string directory=Path.Combine(Path.GetDirectoryName(runtime.Options.Report),"active-checkpoint");
+            var captured=Remains.Serialization.StateJson.Copy(world);
+            var host=captured.Find(runtime.Session.LocalActorId);
+            var thrower=captured.Find("player:session-client-1");
+            if(host==null || thrower==null || Mathf.Abs(host.x-runtime.Session.LocalActor.x)>.1f) return;
+            var hostStore=new SaveStore(Path.Combine(directory,host.character+"-save"));
+            var snapshot=hostStore.SaveWorld(captured);
+            hostStore.SaveCharacter(host);
+            new SaveStore(Path.Combine(directory,thrower.character+"-save")).SaveCharacter(thrower);
+            File.WriteAllText(Path.Combine(directory,"session-host-report.json.active-world.json"),snapshot.Json);
+            checkpointSaved=true;
+        }
         private bool Validate()
         {
             var world=runtime.Session.World;
-            if(world==null || world.grenades.Count!=0 || world.explosions.Count!=1 || Held && Source && !heldLaunchVerified) return false;
+            if(world==null || world.grenades.Count!=0 || world.explosions.Count!=1 || Held && Source && !heldLaunchVerified ||
+                Host && !Resume && !checkpointSaved) return false;
             var explosion=world.explosions[0];var id=explosion.attack.id;
             var players=world.actors.Where(a=>a.player && a.connected).ToArray();
             if(players.Length!=runtime.Options.ProbePeers) return false;
