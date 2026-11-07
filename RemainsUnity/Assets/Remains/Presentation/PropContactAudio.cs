@@ -59,10 +59,26 @@ namespace Remains.Presentation
         private void Reconcile()
         {
             var listener=session.LocalActor;
-            if(!session.LastChange.Any(WorldChangeKind.Containers|WorldChangeKind.Props|WorldChangeKind.Doors) && listener?.level==reconciledLevel && listener!=null) return;
+            bool sameContext=listener!=null && listener.level==reconciledLevel && props?.World.worldId==session.World?.worldId;
+            if(sameContext && !session.LastChange.Any(WorldChangeKind.Containers|WorldChangeKind.Props|WorldChangeKind.Doors)) return;
             reconciledLevel=listener?.level;
-            active.Clear();
             if(session.World!=null && props?.World!=session.World) props=new WorldPropView(session.World);
+            if(interactions!=null && sameContext && !session.LastChange.Any(WorldChangeKind.Doors) && session.LastChangedParts!=null)
+            {
+                foreach(string key in session.LastChangedParts)
+                {
+                    bool container=key.StartsWith("containers:",StringComparison.Ordinal);
+                    if(!container && !key.StartsWith("props:",StringComparison.Ordinal)) continue;
+                    string id=key.Substring(container?11:6);
+                    var prop=WorldProps.Find(session.World,id);
+                    if(prop==null || prop.level!=reconciledLevel || !prop.movable || !prop.hasPhysicalBody)
+                    {tracks.Remove(id);pending.Remove(id);continue;}
+                    if(!tracks.TryGetValue(id,out var track)) tracks.Add(id,track=new PropContactObservation());
+                    track.InvalidateSupport();pending.Add(id);
+                }
+                return;
+            }
+            active.Clear();
             if(listener!=null && session.World!=null)
                 foreach(var prop in props)
                     if(prop.level==listener.level && prop.movable && prop.hasPhysicalBody)
@@ -80,6 +96,7 @@ namespace Remains.Presentation
         private void LateUpdate()
         {
             using var frameSection=Remains.Diagnostics.FrameHitchLog.Section("PropContactAudio.LateUpdate");
+            if(interactions!=null && pending.Count==0) return;
             var listener=session.LocalActor;if(listener==null) return;
             if(props?.World!=session.World) props=new WorldPropView(session.World);
             var room=geometry.Get(listener.level);
@@ -94,6 +111,7 @@ namespace Remains.Presentation
                 samples.Clear();samples.AddRange(pending);pending.Clear();
                 foreach(string id in samples)
                 {
+                    if(!tracks.ContainsKey(id)) continue;
                     var prop=WorldProps.Find(session.World,id);
                     if(prop?.level==listener.level) Sample(prop,room,paused);
                 }

@@ -36,6 +36,7 @@ namespace Remains.Gameplay
                 if(session.LastChange.Any(WorldChangeKind.Props|WorldChangeKind.Containers)) motion.InvalidateSupport();
             };
             interactions.PropMoved+=motion.ExternalMotion;
+            geometry.OcclusionChanged+=motion.WakeLevel;
         }
         public void Step(float delta)
         {

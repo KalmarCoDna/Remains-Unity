@@ -231,13 +231,8 @@ namespace Remains.Presentation
             sprites[actor.weapon]=rest;
             layers.Attach(actor.id,view.transform);return view;
         }
-        private void Update()
+        private void DrawMovingBodies(string shownLevel,string localOwner)
         {
-            using var frameSection=Remains.Diagnostics.FrameHitchLog.Section("InteractionVisuals.Update");
-            muzzleEmissions.Clear();
-            muzzleSourceIds.Clear();
-            if(session?.World==null) return;
-            string shownLevel=session.LocalActor?.level,localOwner=session.LocalOwner;
             settledBodies.Clear();
             foreach(string id in movingBodies)
             {
@@ -252,6 +247,16 @@ namespace Remains.Presentation
                 settledBodies.Add(id);
             }
             foreach(string id in settledBodies) movingBodies.Remove(id);
+        }
+        private void Update()
+        {
+            using var frameSection=Remains.Diagnostics.FrameHitchLog.Section("InteractionVisuals.Update");
+            muzzleEmissions.Clear();
+            muzzleSourceIds.Clear();
+            if(session?.World==null) return;
+            string shownLevel=session.LocalActor?.level,localOwner=session.LocalOwner;
+            using(Remains.Diagnostics.FrameHitchLog.Section("Тела: представления"))
+                DrawMovingBodies(shownLevel,localOwner);
             foreach(var actor in session.World.actors)
             {
                 if(!weapons.TryGetValue(actor.id,out var view)) continue;

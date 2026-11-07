@@ -20,11 +20,13 @@ namespace Remains.Gameplay
             if(roomForLevel==null) throw new ArgumentNullException(nameof(roomForLevel));
             if(isPaused==null) throw new ArgumentNullException(nameof(isPaused));
             if(context==null) throw new ArgumentNullException(nameof(context));
-            using(Remains.Diagnostics.FrameHitchLog.Section("Тела: подготовка опор")) context.Prepare(world,isPaused);
             context.Frame++;
-            int stepped=0,sleeping=0;
-            foreach(var prop in context.Props)
+            using(Remains.Diagnostics.FrameHitchLog.Section("Тела: подготовка опор")) context.Prepare(world,localOwner,isPaused);
+            int stepped=0,sleeping=context.PublishSleeping(publish);
+            var bodies=context.Scheduled;
+            for(int i=0;i<bodies.Count;i++)
             {
+                var prop=bodies[i];
                 if(prop.owner!=localOwner || !prop.movable || !prop.hasPhysicalBody || !context.Running(prop.level)) continue;
                 // A body carried by telekinesis may leave bodies resting on it without support (no geometry needed).
                 if(prop.held) {context.WakeAbove(prop,prop.y);continue;}
@@ -55,7 +57,10 @@ namespace Remains.Gameplay
     {
         public const int SleepAfterSteps=10,VerifyEvery=30;
         private const float Still=.0005f;
-        private sealed class Rest {public float x,y;public int still;public bool asleep;public RoomSurface[] surfaces;public int phase;}
+        private sealed class Rest
+        {
+            public float x,y;public int still;public bool asleep;public RoomSurface[] surfaces;public int phase,generation;
+        }
         // By body object (weak): a received snapshot reuses unchanged body objects, so their sleep survives it.
         private readonly System.Runtime.CompilerServices.ConditionalWeakTable<PropState,Rest> rest=new();
         private int phases;
@@ -66,10 +71,10 @@ namespace Remains.Gameplay
         internal bool Sleeping(PropState prop,RoomLayout room)
         {
             if(!rest.TryGetValue(prop,out var state) || !state.asleep) return false;
-            bool disturbed=prop.vx!=0 || prop.vy!=0 || prop.x!=state.x || prop.y!=state.y || !ReferenceEquals(state.surfaces,room.platforms);
+            bool disturbed=Disturbed(prop,state) || !ReferenceEquals(state.surfaces,room.platforms);
             if(disturbed || (Frame+state.phase)%VerifyEvery==0)
             {
-                state.asleep=false;state.still=disturbed?0:SleepAfterSteps-1;
+                Wake(prop,state,disturbed?0:SleepAfterSteps-1);
                 return false;
             }
             return true;
@@ -83,7 +88,9 @@ namespace Remains.Gameplay
             if(Mathf.Abs(prop.vx)>Still || prop.vy!=0 || passenger?.SupportId!=null) {state.still=0;return;}
             if(++state.still<SleepAfterSteps) return;
             prop.vx=0;   // settle exactly: the decayed residual would otherwise count as motion forever
-            state.x=prop.x;state.y=prop.y;state.surfaces=room.platforms;state.asleep=true;
+            state.x=prop.x;state.y=prop.y;state.surfaces=room.platforms;state.asleep=true;state.generation=prop.generation;
+            if(trackSupport && schedules.TryGetValue(prop.level,out var schedule) && schedule.Awake.Remove(prop))
+                schedule.Sleeping[DueSlot(state)].Add(prop);
         }
 
         // Wakes sleepers that may rest on this body: overlapping it horizontally, with feet at or above its lowest top.
@@ -97,7 +104,7 @@ namespace Remains.Gameplay
                 if(ReferenceEquals(other,mover) || !rest.TryGetValue(other,out var state) || !state.asleep) continue;
                 if(Mathf.Abs(other.x-x)>=(other.width+mover.width)*.5f) continue;
                 if(other.y-other.anchorHeight<top) continue;
-                state.asleep=false;state.still=0;
+                Wake(other,state);
             }
         }
 
@@ -105,22 +112,57 @@ namespace Remains.Gameplay
         private readonly Dictionary<string,RoomLayout> rooms=new(StringComparer.Ordinal);
         private readonly bool trackSupport;
         private bool supportDirty=true;
-        public FreePropMotionContext(bool trackSupport=false)=>this.trackSupport=trackSupport;
+        private string trackedOwner;
+        private sealed class LevelSchedule
+        {
+            public readonly HashSet<PropState> Awake=new();
+            public readonly HashSet<PropState>[] Sleeping=new HashSet<PropState>[VerifyEvery];
+            public LevelSchedule() {for(int i=0;i<Sleeping.Length;i++) Sleeping[i]=new HashSet<PropState>();}
+            public void Clear() {Awake.Clear();foreach(var slot in Sleeping) slot.Clear();}
+        }
+        private readonly Dictionary<string,LevelSchedule> schedules=new(StringComparer.Ordinal);
+        private readonly Dictionary<PropState,int> order=new();
+        private readonly List<PropState> scheduled=new(),waking=new();
+        private readonly Comparison<PropState> compareOrder;
+        public FreePropMotionContext(bool trackSupport=false)
+        {
+            this.trackSupport=trackSupport;
+            compareOrder=(left,right)=>order[left].CompareTo(order[right]);
+        }
         internal readonly MovementHull Hull=new();
         internal readonly PropSupportIndex Support=new();
         internal readonly List<(PropState prop,Vector2 position,Vector2 velocity)> ImpactSources=new();
         internal WorldPropView Props {get;private set;}
+        internal IReadOnlyList<PropState> Scheduled=>trackSupport?scheduled:Props;
+        private static bool Disturbed(PropState prop,Rest state)=>prop.held || prop.generation!=state.generation ||
+            prop.vx!=0 || prop.vy!=0 || prop.x!=state.x || prop.y!=state.y;
+        private static int DueSlot(Rest state)=>(VerifyEvery-state.phase)%VerifyEvery;
+        private void Wake(PropState prop,Rest state,int still=0)
+        {
+            if(trackSupport && schedules.TryGetValue(prop.level,out var schedule) &&
+                schedule.Sleeping[DueSlot(state)].Remove(prop)) schedule.Awake.Add(prop);
+            state.asleep=false;state.still=still;
+        }
+        internal void WakeLevel(string level,RoomLayout room,long revision)
+        {
+            if(!schedules.TryGetValue(level,out var schedule)) return;
+            waking.Clear();
+            foreach(var slot in schedule.Sleeping) waking.AddRange(slot);
+            foreach(var prop in waking) if(rest.TryGetValue(prop,out var state)) Wake(prop,state);
+        }
         internal void InvalidateSupport()=>supportDirty=true;
         internal void ExternalMotion(PropState prop,Vector2 previous)
         {
             if(!trackSupport || supportDirty || !ReferenceEquals(Support.Find(prop.id),prop)) return;
             Support.Moved(prop,previous.x);
+            if(rest.TryGetValue(prop,out var state) && state.asleep && Disturbed(prop,state)) Wake(prop,state);
             WakeAbove(prop,Mathf.Min(previous.y,prop.y),previous.x);
         }
-        internal void Prepare(WorldState world,Func<string,bool> isPaused)
+        internal void Prepare(WorldState world,string localOwner,Func<string,bool> isPaused)
         {
             ImpactSources.Clear();
             if(Props?.World!=world) {Props=new WorldPropView(world);supportDirty=true;}
+            if(trackedOwner!=localOwner) {trackedOwner=localOwner;supportDirty=true;}
             levels.Clear();rooms.Clear();
             foreach(var actor in world.actors)
                 if(actor.player && actor.connected && !levels.ContainsKey(actor.level)) levels.Add(actor.level,!isPaused(actor.level));
@@ -129,8 +171,55 @@ namespace Remains.Gameplay
             if(!trackSupport || supportDirty)
             {
                 Support.Prepare(Props,trackSupport?null:Running);
+                if(trackSupport) RebuildSchedule(localOwner);
                 supportDirty=false;
             }
+            if(!trackSupport) return;
+            scheduled.Clear();
+            int slot=(int)(Frame%VerifyEvery);
+            foreach(var level in levels)
+            {
+                if(!level.Value || !schedules.TryGetValue(level.Key,out var schedule)) continue;
+                scheduled.AddRange(schedule.Awake);scheduled.AddRange(schedule.Sleeping[slot]);
+            }
+            scheduled.Sort(compareOrder);
+        }
+        private void RebuildSchedule(string localOwner)
+        {
+            foreach(var schedule in schedules.Values) schedule.Clear();
+            order.Clear();
+            for(int i=0;i<Props.Count;i++)
+            {
+                var prop=Props[i];
+                if(prop.owner!=localOwner || !prop.movable || !prop.hasPhysicalBody) continue;
+                order.Add(prop,i);
+                if(!schedules.TryGetValue(prop.level,out var schedule)) schedules.Add(prop.level,schedule=new LevelSchedule());
+                if(rest.TryGetValue(prop,out var state) && state.asleep && !Disturbed(prop,state))
+                    schedule.Sleeping[DueSlot(state)].Add(prop);
+                else
+                {
+                    if(state!=null && state.asleep) Wake(prop,state);
+                    schedule.Awake.Add(prop);
+                }
+            }
+        }
+        internal int PublishSleeping(Action<PropState> publish)
+        {
+            if(!trackSupport) return 0;
+            int sleeping=0;
+            int due=(int)(Frame%VerifyEvery);
+            foreach(var level in levels)
+            {
+                if(!level.Value || !schedules.TryGetValue(level.Key,out var schedule)) continue;
+                for(int i=0;i<schedule.Sleeping.Length;i++)
+                {
+                    if(i==due) continue; // Due bodies use the ordinary post-step publication.
+                    var slot=schedule.Sleeping[i];
+                    sleeping+=slot.Count;
+                    if(publish!=null) foreach(var prop in slot) publish(prop);
+                }
+            }
+            return sleeping;
         }
         internal bool Running(string level)=>levels.TryGetValue(level,out bool running) && running;
         internal RoomLayout Room(string level,Func<string,RoomLayout> read)
