@@ -262,6 +262,7 @@ namespace Remains.Runtime
             if(Application.isBatchMode && Options.Smoke!=null && string.IsNullOrEmpty(Options.SaveDirectory))
                 throw new System.InvalidOperationException("Фоновая проверка требует отдельного каталога --save-dir для настроек.");
             AudioPreferences=new AudioPreferences(Path.Combine(Options.SaveDirectory??ProjectStorage.RootDirectory,"Settings","audio.json"));
+            if(!AudioPreferences.ApplySavedBuffer(out string dspNotice))Debug.LogWarning(dspNotice);
             musicMixVolume=Music.Volume;AudioPreferences.Changed+=ApplyAudioPreferences;ApplyAudioPreferences();
             PonyVisual.Prepare();
             Session.Changed+=RefreshVisuals;
