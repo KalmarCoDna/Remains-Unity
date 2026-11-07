@@ -25,7 +25,7 @@ with sync_playwright() as p:
         page.wait_for_timeout(150)
     def draft():return json.loads(page.evaluate("()=>roomEditor.loadDraft()"))
     stroke([(60,60),(84,60),(84,84)])
-    page.wait_for_function("async()=>await roomEditor.loadDraft()!==null")
+    page.evaluate("async()=>{for(let i=0;i<100;i++){if(await roomEditor.loadDraft()!==null)return;await new Promise(r=>setTimeout(r,50));}throw new Error('Draft commit timed out');}")
     assert draft()['layers']['solid'][2][2]!='.' and draft()['layers']['solid'][3][3]!='.'
     page.keyboard.press('Control+z');page.wait_for_timeout(120)
     assert 'solid' not in draft()['layers'], 'one stroke must be one undo action'
