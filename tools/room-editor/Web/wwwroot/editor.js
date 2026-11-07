@@ -27,12 +27,13 @@ window.roomEditor = (() => {
     if(m.selection){const s=m.selection;context.fillStyle='#b0e4bf22';context.fillRect(s.x*z,s.y*z,s.w*z,s.h*z);context.strokeStyle='#b0e4bf';context.strokeRect(s.x*z,s.y*z,s.w*z,s.h*z);}
   }
   function coordinates(e){const r=canvas.getBoundingClientRect();return [Math.floor((e.clientX-r.left)*canvas.width/r.width),Math.floor((e.clientY-r.top)*canvas.height/r.height)];}
-  let database;
+  let database,pendingDrafts=0;
+  window.addEventListener('beforeunload',e=>{if(pendingDrafts>0){e.preventDefault();e.returnValue='';}});
   function drafts(){
     if(!database)database=new Promise((resolve,reject)=>{const request=indexedDB.open('remains-room-editor',1);request.onupgradeneeded=()=>request.result.createObjectStore('drafts');request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);});
     return database;
   }
-  async function putDraft(key,text){const db=await drafts();return new Promise((resolve,reject)=>{const tx=db.transaction('drafts','readwrite');tx.objectStore('drafts').put(text,key);tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||new Error('Draft transaction aborted'));});}
+  async function putDraft(key,text){pendingDrafts++;try{const db=await drafts();await new Promise((resolve,reject)=>{const tx=db.transaction('drafts','readwrite');tx.objectStore('drafts').put(text,key);tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||new Error('Draft transaction aborted'));});}finally{pendingDrafts--;}}
   async function getDraft(key,legacy){const db=await drafts();return new Promise((resolve,reject)=>{const tx=db.transaction('drafts','readonly'),request=tx.objectStore('drafts').get(key);request.onsuccess=()=>{let value=request.result;if(value===undefined){try{value=localStorage.getItem(legacy);}catch{value=null;}}resolve(value??null);};request.onerror=()=>reject(request.error);});}
   return {
     init(dotnet){bridge=dotnet;canvas=document.getElementById('room-canvas');context=canvas.getContext('2d');

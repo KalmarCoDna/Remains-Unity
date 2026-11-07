@@ -11,7 +11,7 @@ else
 <aside>
  <section><h2>@Strings.Text070</h2><div class="row"><label>@Strings.Text008<input type="number" aria-label="@Strings.Text099" @bind="width"/></label><label>@Strings.Text071<input type="number" aria-label="@Strings.Text100" @bind="depth"/></label></div><button @onclick="NewMap">@Strings.Text072</button>
  <label>@Strings.Text073<InputFile class="file-input" OnChange="Open" accept=".json"/></label><button @onclick="Download">@Strings.Text074</button>
- <button disabled="@(!map.CanUndo)" @onclick="()=>Run(map.Undo)">@Strings.Text024</button><button disabled="@(!map.CanRedo)" @onclick="()=>Run(map.Redo)">@Strings.Text025</button></section>
+ <button disabled="@(!map.CanUndo)" @onclick="UndoMap">@Strings.Text024</button><button disabled="@(!map.CanRedo)" @onclick="RedoMap">@Strings.Text025</button></section>
  <section><h2>@Strings.Text075</h2><label>@Strings.Text076<InputFile class="file-input" OnChange="AddRoomFile" accept=".json"/></label><button @onclick="UseCurrentRoom">@Strings.Text077</button></section>
  <section><h2>@Strings.Room (@x,@y)</h2><select class="wide" aria-label="@Strings.Text101" @bind="template">@foreach(var name in map.Templates.Keys){<option value="@name">@name</option>}</select><label><input type="checkbox" @bind="mirror"/>@Strings.Text078</label><button @onclick="SetRoom">@Strings.Text079</button><button @onclick="EditRoom">@Strings.Text080</button>
  <label>@Strings.Text081<select class="wide" @bind="exitPoint"><option value="">@Strings.Text082</option>@foreach(var o in map.Templates[map.Layout.Cell(x,y).Template].Objects.Where(o=>o.Id!=null&&o.Type=="remains:obj:player")){<option value="@o.Id">@o.Id · @o.Type.Split(':').Last()</option>}</select></label><button @onclick="SetExit">@Strings.Text083</button></section>
@@ -67,7 +67,9 @@ else
  void Preview(){try{string border=RoomDocument.Definitions.Items.Values.First(d=>d.Kind==RoomDefinitionKind.Solid).Id;preview=map.Build(RoomDocument.Definitions,border);status=Strings.BuiltGrid(preview.Level.Width,preview.Level.Height);error=null;}catch(Exception e){error=e.Message;}}
  async Task Open(InputFileChangeEventArgs e){try{string text=await FileText.Read(e.File);if(!await JS.InvokeAsync<bool>("confirm",Strings.Text107))return;await Run(()=>{map.Open(text);Choose(0,0);});}catch(Exception err){error=err.Message;}}
  Task Download()=>JS.InvokeVoidAsync("roomEditor.download","my-map.layout.json",map.Save()).AsTask();
- public async Task Shortcut(string key){if(key=="undo")await Run(map.Undo);else if(key=="redo")await Run(map.Redo);StateHasChanged();}
+ Task UndoMap()=>Run(()=>{map.Undo();Choose(Math.Min(x,map.Layout.Width-1),Math.Min(y,map.Layout.Depth-1));});
+ Task RedoMap()=>Run(()=>{map.Redo();Choose(Math.Min(x,map.Layout.Width-1),Math.Min(y,map.Layout.Depth-1));});
+ public async Task Shortcut(string key){if(key=="undo")await UndoMap();else if(key=="redo")await RedoMap();StateHasChanged();}
  public void Dispose(){navCancel?.Cancel();}
  async Task EditRoom(){await OpenRoom.InvokeAsync(RoomSerializer.Write(map.Templates[map.Layout.Cell(x,y).Template]));}
 }
