@@ -9,7 +9,8 @@ target=base/'Web/wwwroot/data'
 if target.exists():
     shutil.rmtree(target)
 target.mkdir(parents=True,exist_ok=True)
-shutil.copy2(source/'definitions.json',target/'definitions.json')
+for name in ['definitions.json','lands.json','decor-without-picture.json']:
+    shutil.copy2(source/name,target/name)
 shutil.copytree(source/'Tiles',target/'Tiles',ignore=shutil.ignore_patterns('*.meta'),dirs_exist_ok=True)
 rooms=[]
 for path in sorted(source.rglob('*.room.json')):

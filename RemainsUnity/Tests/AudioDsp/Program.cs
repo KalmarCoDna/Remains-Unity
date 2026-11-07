@@ -63,5 +63,6 @@ class Program
   p=new AudioPreferences(null,readFault,_=>writes++);Check(!p.TrySaveBuffer(256,out _)&&readFault.Config.dspBufferSize==512&&readFault.Calls.Count==2,"postreset read failure not rolled back");
   Check(writes==0,"failed applications persisted settings");
   Console.WriteLine("AUDIO_DSP_LOGIC_PASS: "+checks+" checks; real device/Unity latency not exercised.");
+  Remains.Editor.AudioDspLoopChecks.Run();
  }
 }

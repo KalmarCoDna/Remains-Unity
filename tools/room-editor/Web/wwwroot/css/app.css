@@ -56,3 +56,5 @@ aside{max-height:45vh}
 header{height:auto;flex-wrap:wrap}
 h1{font-size:16px}
 }
+
+.toolbar label{display:flex;align-items:center;gap:6px;margin:0}

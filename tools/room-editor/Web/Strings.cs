@@ -150,4 +150,10 @@ public static class Strings
  public const string AutosaveError="Черновик не сохранён в браузере. Скачайте файл: ";
  public const string MapStartX="X старта карты";
  public const string MapStartY="Y старта карты";
+ public static string MetersValue(double value)=>value.ToString("0.###",System.Globalization.CultureInfo.InvariantCulture).Replace('.',',');
+ public const string RenderDescription="Маски клеток и текстуры, слои декора, смешивание и окна соответствуют правилам публичной версии игры. Свет в этом режиме не рассчитывается.";
+ public const string ShowGrid="Сетка и линейка";
+ public const string ShowObjectNames="Подписи объектов";
+ public const string RoomOptions="Настройки комнаты";
+ public const string RoomOptionsHint="Значения — строки. backwall задаёт текстуру задника, backform — его форму, fon — дальний фон, lon — вариант кадров ламп. Остальные параметры сохраняются.";
 }

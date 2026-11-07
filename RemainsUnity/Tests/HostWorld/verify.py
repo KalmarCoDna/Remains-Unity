@@ -11,6 +11,7 @@ p.add_argument('--port',type=int,default=19440)
 p.add_argument('--expect-default',choices=['on','off'])
 p.add_argument('--timeout',type=int,default=180)
 p.add_argument('--windowed',action='store_true',help='Use a normal graphical window (Linux batchmode can expose startup 640x480)')
+p.add_argument('--wait-host-admission',action='store_true',help='Delay guest until local host admission; use only with probes whose startup budget permits sequential loading')
 a=p.parse_args();a.player=a.player.resolve();a.output=a.output.resolve();a.output.mkdir(parents=True,exist_ok=True)
 if not a.player.is_file():p.error('Player does not exist')
 if os.name=='posix' and not os.environ.get('DISPLAY') and not os.environ.get('WAYLAND_DISPLAY'):p.error('Graphical Player requires DISPLAY or WAYLAND_DISPLAY')
@@ -36,7 +37,16 @@ for mode in a.modes:
     (directory/(character+'-command.json')).write_text(json.dumps(command,ensure_ascii=False,indent=2))
     stream=(directory/(character+'-stdout.log')).open('w');streams.append(stream)
     processes.append(subprocess.Popen(command,stdout=stream,stderr=subprocess.STDOUT))
-    if index==0:time.sleep(2)
+    if index==0 and not a.wait_host_admission:time.sleep(2)
+    if index==0 and a.wait_host_admission:
+     # A cold Linux fixture may take longer than KCP's connect timeout. Start the guest after the host's own
+     # admission/geometry preparation, rather than racing an arbitrary two-second delay.
+     ready_deadline=time.monotonic()+90;host_log_path=directory/(character+'.log')
+     while time.monotonic()<ready_deadline and processes[0].poll() is None:
+      host_text=host_log_path.read_text(errors='replace') if host_log_path.exists() else ''
+      if 'Подключён хост:' in host_text or 'Подключён выбранный персонаж:' in host_text:break
+      time.sleep(.25)
+     else:raise RuntimeError('Host did not complete its local admission before starting the guest')
    deadline=time.monotonic()+a.timeout
    while any(process.poll() is None for process in processes) and time.monotonic()<deadline:time.sleep(.5)
    for process in processes:
