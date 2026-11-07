@@ -186,7 +186,7 @@ namespace Remains.Runtime
                 gameObject.AddComponent<SessionTimingDiagnostics>().Initialize(this);
             Combat.DamageApplied+=DamageFeedback.Publish;
             Revival=new RevivalController(Session);
-            Interactions=new InteractionAdapter(Session);
+            Interactions=new InteractionAdapter(Session,Geometry.Find);
             Grenades=new GrenadeController(Session,Interactions,Combat,Geometry);
             Telekinesis=new TelekinesisController(Session,Interactions,Geometry);
             freeProps=new FreePropSimulation(Session,Geometry,Interactions,Platforms);

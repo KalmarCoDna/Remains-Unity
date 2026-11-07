@@ -11,11 +11,14 @@ namespace Remains.Networking
     public sealed class InteractionAdapter
     {
         private readonly CoopSession session;
+        private readonly Func<string,RoomLayout> grenadeRoom;
         public event Action<GrenadeState> GrenadeUpdated;
         public event Action<PropState,Vector2> PropMoved;
         public InteractionAdapter(CoopSession session)
+            :this(session,null) {}
+        public InteractionAdapter(CoopSession session,Func<string,RoomLayout> grenadeRoom)
         {
-            this.session=session;
+            this.session=session;this.grenadeRoom=grenadeRoom;
             session.ServerReady+=()=>
             {
                 NetworkServer.RegisterHandler<PropGrabMessage>(Remains.Networking.MessageTiming.Server<PropGrabMessage>(Grab));
@@ -138,8 +141,11 @@ namespace Remains.Networking
                 !double.IsFinite(message.simulationRemainder) || message.simulationRemainder<0 || message.simulationRemainder>=GrenadeRules.SimulationStep ||
                 !float.IsFinite(message.remaining) || message.remaining<0 || message.remaining>grenade.remaining+.001f)
             {Debug.LogWarning($"Некорректное состояние гранаты: id={message.id}, generation={message.generation}, remaining={message.remaining}.");return;}
+            bool fire=message.detonate && WeaponCatalog.Get(grenade.weapon).IsFire;
+            var room=message.detonate && !fire && grenadeRoom!=null
+                ? grenadeRoom(grenade.level)??RoomLayout.Load(grenade.level,session.ServerWorld) : null;
             Apply(grenade,message);
-            if(message.detonate && WeaponCatalog.Get(grenade.weapon).IsFire)
+            if(fire)
             {
                 // A fire grenade or bottle splashes burning droplets instead of a blast (FireRules).
                 // No fire when a bottle burnt all its fuel in flight; the bottle is gone either way.
@@ -148,11 +154,11 @@ namespace Remains.Networking
             }
             else if(message.detonate)
             {
-                var explosion=GrenadeRules.Detonate(session.ServerWorld,grenade,message.enemyHits);
+                var explosion=GrenadeRules.Detonate(session.ServerWorld,grenade,message.enemyHits,room);
                 if(explosion==null) return;
                 session.CommitWorld();
                 NetworkServer.SendToAll(AttackMessage.From(explosion.attack));
-                session.Hazards.Blast(explosion.attack);
+                session.Hazards.Blast(explosion.attack,explosion.grenadeCover);
             }
             else NetworkServer.SendToAll(message);
         }
