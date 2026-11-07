@@ -5,6 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import struct
 import subprocess
 import sys
 import tempfile
@@ -22,6 +23,26 @@ def quoted(path):
     if '"' in value or "\n" in value or "\r" in value:
         raise ValueError("Unsupported character in compiler path")
     return '"' + value + '"'
+
+
+def managed_assembly(path):
+    """Windows runtime folders also contain native DLLs; only PE/CLI images are references."""
+    data = path.read_bytes()
+    try:
+        if data[:2] != b'MZ':
+            return False
+        pe = struct.unpack_from('<I', data, 0x3c)[0]
+        if data[pe:pe + 4] != b'PE\0\0':
+            return False
+        optional = pe + 24
+        magic = struct.unpack_from('<H', data, optional)[0]
+        if magic not in (0x10b, 0x20b):
+            return False
+        directories = optional + (96 if magic == 0x10b else 112)
+        cli_rva, cli_size = struct.unpack_from('<II', data, directories + 14 * 8)
+        return cli_rva != 0 and cli_size != 0
+    except struct.error:
+        return False
 
 
 def tools(editor):
@@ -57,8 +78,8 @@ def run_suite(name, toolchain, work):
     program = work / "Checks.dll"
     response = work / "compile.rsp"
     response.write_text("\n".join(
-        ["-nologo", "-target:exe", "-nostdlib+", "-out:" + quoted(program)]
-        + ["-r:" + quoted(p) for p in sorted(framework.glob("*.dll"))]
+        ["-nologo", "-utf8output", "-target:exe", "-nostdlib+", "-out:" + quoted(program)]
+        + ["-r:" + quoted(p) for p in sorted(framework.glob("*.dll")) if managed_assembly(p)]
         + [quoted(p) for p in sources + [main]]), encoding="utf-8")
     major, minor, _ = framework.name.split(".")
     (work / "Checks.runtimeconfig.json").write_text(json.dumps({"runtimeOptions": {
