@@ -46,11 +46,12 @@ namespace Remains.Domain
         public static InteractionTarget Select(WorldState world,ActorState actor,GameplayRuleSet rules,Vector2 cursor,
             System.Collections.Generic.IReadOnlyList<TravelPoint> travelPoints=null,
             System.Collections.Generic.IReadOnlyList<MechanismInteractionPoint> mechanismPoints=null,
-            System.Collections.Generic.IReadOnlyList<RoomRest> beds=null)
+            System.Collections.Generic.IReadOnlyList<RoomRest> beds=null,RoomLayout room=null)
         {
             if(world==null || actor==null || actor.down || !actor.connected || !float.IsFinite(cursor.x) || !float.IsFinite(cursor.y)) return default;
             foreach(var other in world.actors)
-                if(HealingRules.CanApply(actor,other,false) && InventorySource.BodyBounds(other).Contains(cursor))
+                if(HealingRules.CanApply(actor,other,false) && InventorySource.BodyBounds(other).Contains(cursor) &&
+                    (room==null || HealingRules.RevivalPathClear(room,actor,other)))
                     return new(InteractionKind.Revival,other.id,InventorySource.BodyBounds(other));
             InteractionTarget selected=default;float centerDistance=float.PositiveInfinity;
             foreach(var container in world.containers)

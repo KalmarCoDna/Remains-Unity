@@ -1503,9 +1503,18 @@ namespace Remains.Networking
             var target = ServerWorld.Find(message.target);
             bool current=target!=null && healer.generation==message.healerGeneration && healer.lifecycleSequence==message.healerLifecycle &&
                 healer.damageSequence==message.damageSequence && target.generation==message.targetGeneration && target.lifecycleSequence==message.targetLifecycle;
-            if(!current || !HealingRules.ApplyOnce(ServerWorld,healer,target,message.selfHeal,message.item,message.transaction))
+            RoomLayout revivalRoom=null;
+            if(current && !message.selfHeal && HealingRules.CanApply(healer,target,false))
+            {
+                // The requesting peer may still see an open door. Use the host's current obstacle snapshot.
+                revivalRoom=RoomLayout.Load(healer.level,ServerWorld);
+                revivalRoom.platforms=DoorGeometry.Compose(revivalRoom.platforms,ServerWorld.doors,healer.level);
+                RoomSurfaces.Prepare(revivalRoom);
+                Remains.Gameplay.PlatformSimulation.RestoreSupport(ServerWorld,revivalRoom,healer.level,LevelTime.ReadServer(healer.level));
+            }
+            if(!current || !HealingRules.ApplyOnce(ServerWorld,healer,target,message.selfHeal,message.item,message.transaction,revivalRoom))
             {connection.Send(new HealingReplyMessage {transaction=message.transaction,success=false,reason="Лечение отменено: изменилось состояние, расстояние или нет лечебного предмета."});return;}
-            BroadcastWorld();
+            BroadcastWorld(forceRecovery:!message.selfHeal);
             connection.Send(new HealingReplyMessage {transaction=message.transaction,success=true,
                 reason=message.selfHeal?"Лечебный предмет использован.":"Союзник поднят. Лечебный предмет использован."});
             HealingAudio.Publish(healer,message.transaction,"heal");
@@ -1553,11 +1562,11 @@ namespace Remains.Networking
             }
         }
 
-        private void BroadcastWorld()
+        private void BroadcastWorld(bool forceRecovery=false)
         {
             // The shared change reaches clients as a tick now (before the messages that follow it on this channel).
             FlushTick(true);
-            if(!RecoveryDue()) {Pause.Publish();npcHits?.Flush();return;}
+            if(!forceRecovery && !RecoveryDue()) {Pause.Publish();npcHits?.Flush();return;}
             using var timing=TransitionTiming.Measure("snapshot.broadcast",ServerWorld?.worldId);
             using var frameSection=Remains.Diagnostics.FrameHitchLog.Section("Снимок мира");
             Pause.Publish();

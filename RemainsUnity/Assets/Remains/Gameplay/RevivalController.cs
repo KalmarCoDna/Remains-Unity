@@ -7,14 +7,15 @@ namespace Remains.Gameplay
     public sealed class RevivalController
     {
         private readonly CoopSession session;
+        private readonly SimulationGeometry geometry;
         private readonly RevivalProgress progress=new();
         private string pending;
         private float deadline;
         public float Progress=>progress.Progress;
         public bool Pending=>pending!=null;
-        public RevivalController(CoopSession session)
+        public RevivalController(CoopSession session,SimulationGeometry geometry)
         {
-            this.session=session;
+            this.session=session;this.geometry=geometry;
             session.HealingFinished+=(transaction,success)=>{if(pending==transaction) {pending=null;progress.Reset();}};
             session.Changed+=()=>{if(session.LocalActor==null) {pending=null;progress.Reset();}};
         }
@@ -23,7 +24,8 @@ namespace Remains.Gameplay
             // Pointerless compatibility for direct simulation tools. Live input
             // supplies the same explicit target as the hint and the E action.
             var healer=session.LocalActor;
-            var target=session.World?.actors.Find(a=>HealingRules.CanApply(healer,a,false));
+            var room=geometry.Find(healer?.level);
+            var target=room==null?null:session.World?.actors.Find(a=>HealingRules.CanApply(healer,a,false) && HealingRules.RevivalPathClear(room,healer,a));
             StepTarget(target,held,dt);
         }
         public void Step(InteractionTarget selection,bool held,float dt)
@@ -40,7 +42,8 @@ namespace Remains.Gameplay
             }
             var healer=session.LocalActor;
             if(healer!=null && session.Pause.IsPaused(healer.level)) return;
-            if(progress.Step(healer,target,held,dt))
+            var room=geometry.Find(healer?.level);
+            if(progress.Step(healer,target,held && room!=null,dt,room))
             {pending=session.RequestRevive(target.id);deadline=Time.unscaledTime+10;}
         }
     }
