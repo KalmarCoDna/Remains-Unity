@@ -116,9 +116,9 @@ namespace Remains.Presentation
             reloadAnimation=gameObject.AddComponent<WeaponReloadAnimation>();reloadAnimation.Initialize(session,reload);
             casingEffects=gameObject.AddComponent<CasingEffects>();casingEffects.Initialize(session,layers.Orders);
             ShotArtwork.Prepare();
+            // World views reconcile after the runtime has published the shared visual order.
             session.Changed+=Refresh;
             if(interactions!=null) interactions.PropMoved+=OnPropMoved;
-            session.Deposits.Reconciled+=Refresh;
             grenades.Created+=OnGrenadeCreated;
             session.AttackReceived+=OnAttackReceived;
         }
@@ -142,7 +142,7 @@ namespace Remains.Presentation
         private void OnDestroy()
         {
             if(interactions!=null) interactions.PropMoved-=OnPropMoved;
-            if(session!=null) {session.Changed-=Refresh;session.Deposits.Reconciled-=Refresh;session.AttackReceived-=OnAttackReceived;}
+            if(session!=null) {session.Changed-=Refresh;session.AttackReceived-=OnAttackReceived;}
             if(grenades!=null) grenades.Created-=OnGrenadeCreated;
         }
         private void OnPropMoved(PropState prop,Vector2 previous)

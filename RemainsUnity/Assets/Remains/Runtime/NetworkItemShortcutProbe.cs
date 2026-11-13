@@ -31,6 +31,7 @@ namespace Remains.Runtime
         private bool heldObserved,dropObserved,heldReleased,dropReleased;
         private int visualChangedFrame,phaseStartedFrame;
         private PropView observedDropView;
+        private string dropOrderFailure;
         private float heldAt;
         private bool directSelected,healedByUi,healingClosedForLifecycle;
         private int directSelections,commandSamples;
@@ -55,6 +56,7 @@ namespace Remains.Runtime
         {
             if(value.Hud==null) throw new InvalidOperationException("Проверка быстрых клавиш требует игровой интерфейс: запустите сценарий с CaptureFrames.");
             runtime=value;deadline=Time.unscaledTime+90;value.CommandSource=Command;value.Session.Changed+=VisualChanged;
+            Application.logMessageReceived+=ObserveDropOrderFailure;
             if(Direct)
             {
                 if(value.Options.Smoke.Contains("-frames-")==false || Screen.width!=1920 || Screen.height!=1080 || string.IsNullOrEmpty(value.Options.SaveDirectory))
@@ -382,9 +384,15 @@ namespace Remains.Runtime
             }
             landing.count++;
         }
+        private void ObserveDropOrderFailure(string message,string trace,LogType type)
+        {
+            if(type==LogType.Exception && message.Contains("kind=Container, id=drop:",StringComparison.Ordinal))
+                dropOrderFailure??=message;
+        }
         private void Finish(bool success,string detail)
         {
             if(finished) return;
+            if(dropOrderFailure!=null) {success=false;detail=dropOrderFailure;}
             if(success && new[]{3,4,13,14}.Any(evidence=>!captures.Contains(evidence)))
             {success=false;detail="Не все этапы удержания/броска действительно наблюдались до подбора: "+string.Join(",",captures.OrderBy(value=>value));}
             if(success && Direct && (!healedByUi || healing.Count!=runtime.Options.ProbePeers ||
@@ -402,7 +410,7 @@ namespace Remains.Runtime
             StartCoroutine(Exit(success));
         }
         private IEnumerator Exit(bool success) {yield return new WaitForSecondsRealtime(1);Application.Quit(success?0:1);}
-        private void OnDestroy() {if(runtime!=null) {runtime.Session.Changed-=VisualChanged;runtime.PropAudio.LandingPlayed-=ObserveLanding;runtime.HealingAudio.HealingPlayed-=ObserveHealing;}}
+        private void OnDestroy() {Application.logMessageReceived-=ObserveDropOrderFailure;if(runtime!=null) {runtime.Session.Changed-=VisualChanged;runtime.PropAudio.LandingPlayed-=ObserveLanding;runtime.HealingAudio.HealingPlayed-=ObserveHealing;}}
         [Serializable] private sealed class Report {public bool success;public string detail;public int phase,total;public int[] observedStages;public bool directInventory,ordinaryHub,healedByUi,healingClosedForLifecycle,startingPositionFixture;public Vector2 initialPosition,fixturePosition;public int directSelections,commandSamples,healingAccepted,healingPlayed;public LandingWitness[] landings;public HealingWitness[] healing;}
     }
 }
