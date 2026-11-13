@@ -105,7 +105,22 @@ namespace Remains.Persistence
                         long latest=group.Max(entry=>entry.summary.sequence);
                         return group.Where(entry=>entry.summary.sequence==latest);
                     }).ToList();
-                result.entries=heads.Where(e=>!heads.Any(other=>e.summary.snapshot!=other.summary.snapshot && other.summary.CompareTo(e.summary)==WorldRelation.Newer))
+                var forkPoints=new Dictionary<(string world,string branch),long>();
+                foreach(var head in heads)
+                {
+                    var summary=head.summary;
+                    if(summary.historyVersion!=1 || summary.ancestors==null) continue;
+                    foreach(var ancestor in summary.ancestors)
+                    {
+                        if(ancestor.branchId==summary.branchId) continue;
+                        var key=(summary.worldId,ancestor.branchId);
+                        if(!forkPoints.TryGetValue(key,out long knownSequence) || ancestor.sequence>knownSequence)
+                            forkPoints[key]=ancestor.sequence;
+                    }
+                }
+                result.entries=heads.Where(entry=>entry.summary.historyVersion!=1 ||
+                    !forkPoints.TryGetValue((entry.summary.worldId,entry.summary.branchId),out long forkSequence) ||
+                    entry.summary.sequence>forkSequence)
                     .OrderBy(e=>e.summary.worldId,StringComparer.Ordinal).ThenBy(e=>e.summary.snapshot,StringComparer.Ordinal).ToList();
                 return result;
             }
