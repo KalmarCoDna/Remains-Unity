@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Remains.Content;
 using Remains.Domain;
 using Remains.Serialization;
@@ -21,15 +22,15 @@ namespace Remains.Editor
             public readonly ActorState player=new() {id="player",player=true,connected=true,owner="connection:1",level="factory:0",generation=3,lifecycleSequence=5};
             public readonly DoorState door=new() {id="office-door",definition="base:door",level="factory:0",surfaceTexture="metal",x=2,y=0,width=.4f,height=2.4f,
                 integrity=new DoorIntegrity {maxHealth=100,health=100}};
-            public readonly WeaponDefinition weapon=new() {id="crowbar",damage=14};
+            public readonly WeaponDefinition weapon;
             public readonly DoorDamageAttackLedger ledger=new();
             public readonly DoorDamageRequestData request;
-            public Fixture(bool projectile=false)
+            public Fixture(bool projectile=false,WeaponDefinition configuredWeapon=null)
             {
+                weapon=configuredWeapon??new WeaponDefinition {id=projectile?"pistol":"crowbar",damage=projectile?11:14,projectileSpeed=projectile?25:0};
                 world.actors.Add(player);world.doors.Add(door);
-                var attack=new AttackEvent {id="attack",attacker=player.id,weapon=projectile?"pistol":"crowbar",level=player.level,
+                var attack=new AttackEvent {id="attack",attacker=player.id,weapon=weapon.id,level=player.level,
                     sourceOwner=player.owner,sourcePlayer=true,originX=0,originY=1,endX=4,endY=1,speed=projectile?25:4,radius=projectile?0:.08f};
-                weapon.id=attack.weapon;weapon.projectileSpeed=projectile?25:0;weapon.damage=projectile?11:14;
                 request=new DoorDamageRequestData {world=world.worldId,door=door.id,decisionActor=player.id,
                     decisionGeneration=player.generation,decisionLifecycle=player.lifecycleSequence,sourceGeneration=player.generation,
                     sourceLifecycle=player.lifecycleSequence,attack=attack,contact=new Vector2(2,1),projectileGeneration=projectile?4:0};
@@ -50,6 +51,17 @@ namespace Remains.Editor
                 Check(f.Apply(out string reason,paused)==DoorChange.Rejected && !string.IsNullOrWhiteSpace(reason),"Некорректный контакт должен иметь явную причину отказа.");
                 Check(before==StateJson.ToJson(f.door),"Отказ не меняет HP, revision, receipts или extensions.");
             }
+            var catalog=GameAssets.Load<WeaponAssetCatalog>("Content/WeaponCatalog");
+            var hoof=catalog.AllAssets().Single(asset=>asset.Id=="punch").CreateDefinition();
+            var punch=new Fixture(configuredWeapon:hoof);
+            var hoofChange=punch.Apply(out string hoofReason);
+            Check(hoofChange==DoorChange.Changed && punch.door.integrity.health==100-hoof.damage && punch.door.revision==1,
+                "Штатное копыто наносит урон разрушаемой двери: "+hoofReason);
+            Check(punch.Apply(out _)==DoorChange.Unchanged && punch.door.revision==1,"Повтор контакта копыта не наносит урон дважды.");
+            var intact=new Fixture(configuredWeapon:hoof);
+            intact.door.integrity=null;
+            Check(intact.Apply(out string intactReason)==DoorChange.Rejected && intact.door.Blocks && intact.door.revision==0 &&
+                intactReason.Contains("не поддерживает разрушаемую целостность"),"Неразрушаемая дверь остаётся препятствием без запроса мода.");
             var melee=new Fixture();
             Reject(f=>f.door.integrity.resolvedAttacks=null);
             Reject(f=>f.door.integrity.version=2);
