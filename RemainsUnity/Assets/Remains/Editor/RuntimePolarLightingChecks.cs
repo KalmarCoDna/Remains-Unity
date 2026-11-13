@@ -81,7 +81,13 @@ namespace Remains.Editor
                 Finish(light);view.Present(area,noFlashes,noMasks,noIds);
                 Require(Different(baseline,ReadGlobal("_RemainsRadiance"))>5,"Событие лампы не изменило опубликованный свет.");
                 // A second event interrupts an incomplete local sum; only the final canonical state may publish.
-                light.SetDark(noIds);doors[0]=new("check-door",doors[0].Bounds,1,false);light.SetDoors(doors);light.Step(1,1);
+                light.SetDark(noIds);doors[0]=new("check-door",doors[0].Bounds,1,false);light.SetDoors(doors);
+                Require(light.Direct.HasPendingPublication && light.Fill.HasWork,"Смешанное событие должно поставить работу в обе очереди.");
+                var previous=ReadGlobal("_RemainsRadiance");
+                light.Step(1,1);
+                Require(light.Fill.LastGridCells>0 && light.HasPendingPublication,"Один шаг должен начать локальное заполнение и сохранить барьер публикации.");
+                view.Present(area,noFlashes,noMasks,noIds);
+                Require(Different(previous,ReadGlobal("_RemainsRadiance"))==0,"Камера опубликовала промежуточный свет двери и лампы.");
                 doors[0]=new("check-door",doors[0].Bounds,1,true);light.SetDoors(doors);
                 doors[0]=new("check-door",doors[0].Bounds,1,false);light.SetDoors(doors);Finish(light);
                 var localDirect=Read(light.Direct.Sum);var localFill=Read(light.Fill.Texture);

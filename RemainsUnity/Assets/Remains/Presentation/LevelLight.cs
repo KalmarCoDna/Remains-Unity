@@ -108,13 +108,18 @@ namespace Remains.Presentation
             if(!fast)foreach(int index in changedSources)Direct.SourceChanged(index);
             darkSources.Clear();darkSources.UnionWith(nextDarkSources);
         }
-        // Event work of one frame: field builds of direct light first; bounce windows once direct light is final.
+        // Grid fill reads the current geometry and sources independently of the direct sum.
+        // The camera retains its previous composite until both queues are ready.
         public bool HasWork=>Direct.HasWork || (UsesGridFill?Fill.HasWork:Bounce.HasWork);
         public bool HasPendingPublication=>publishingLamp || Direct.HasPendingPublication || (UsesGridFill?Fill.HasWork:Bounce.HasWork);
         public bool Step(int maxBuilds,int bounceStages)
         {
-            if(Direct.HasWork) Direct.Step(maxBuilds);
-            else if(UsesGridFill)Fill.Step(bounceStages);
+            if(UsesGridFill)
+            {
+                if(Fill.HasWork)Fill.Step(bounceStages);
+                if(Direct.HasWork)Direct.Step(maxBuilds);
+            }
+            else if(Direct.HasWork)Direct.Step(maxBuilds);
             else Bounce.Step(bounceStages);
             return HasWork;
         }
