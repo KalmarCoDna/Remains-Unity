@@ -15,5 +15,6 @@ MonoBehaviour:
   version: 1
   definition: wallsafe
   mode: 0
+  wallMounted: 1
   closed: {fileID: 21300000, guid: f41301259fae8ca4ba05be44c07a5d5b, type: 3}
   opened: {fileID: 0}

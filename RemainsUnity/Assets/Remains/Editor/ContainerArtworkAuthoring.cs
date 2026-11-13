@@ -14,9 +14,9 @@ namespace Remains.Editor
         public const string Folder="Assets/Remains/RoomDrafts/Containers/ArtworkProfiles";
         private sealed class Entry
         {
-            public string id,openResource;public Rect openRect;public Vector2 openPivot;public float ppu;
-            public Entry(string id,string resource=null,Rect rect=default,Vector2 pivot=default,float ppu=0)
-            {this.id=id;openResource=resource;openRect=rect;openPivot=pivot;this.ppu=ppu;}
+            public string id,openResource;public Rect openRect;public Vector2 openPivot;public float ppu;public bool wallMounted;
+            public Entry(string id,string resource=null,Rect rect=default,Vector2 pivot=default,float ppu=0,bool wallMounted=false)
+            {this.id=id;openResource=resource;openRect=rect;openPivot=pivot;this.ppu=ppu;this.wallMounted=wallMounted;}
             public bool Alternate=>openResource!=null;
             public bool SeparateSprite=>ppu>0;
         }
@@ -27,10 +27,10 @@ namespace Remains.Editor
             new("ammobox","Original/Containers/ammobox-open",new Rect(0,0,160,160),new Vector2(80,78),200),
             new("explbox","Original/Containers/OfficeLoot/explbox-open"),
             new("weapbox","Original/Containers/OfficeLoot/weapbox-open"),
-            new("medbox","Original/Containers/OfficeLoot/medbox-open"),
+            new("medbox","Original/Containers/OfficeLoot/medbox-open",wallMounted:true),
             new("instr1","Original/Containers/OfficeLoot/instr1-open"),
             new("trash","Original/Containers/OfficeFurniture/trash-open"),
-            new("filecab"),new("table"),new("table1"),new("bookcase"),new("instr2"),new("bigbox"),
+            new("filecab"),new("table"),new("table1"),new("bookcase",wallMounted:true),new("instr2",wallMounted:true),new("bigbox"),
             new("box"),new("mcrate1"),new("mcrate2"),new("mcrate3"),new("mcrate4"),new("woodbox"),new("prototype-crate")
         };
         public static string ProfilePath(string id)=>Folder+"/"+id+".asset";
@@ -66,7 +66,7 @@ namespace Remains.Editor
             }
             profile.Validate(entry.id);
             if(profile.Closed!=prefab.Artwork.sprite || profile.Mode!=(entry.Alternate?ContainerArtworkMode.ClosedOpened:ContainerArtworkMode.Static) ||
-                profile.Opened!=(entry.Alternate?Opened(entry):null) || prefab.ContainerArtwork!=profile)
+                profile.Opened!=(entry.Alternate?Opened(entry):null) || profile.WallMounted!=entry.wallMounted || prefab.ContainerArtwork!=profile)
                 throw new InvalidOperationException("Профиль не совпал с явно подтверждённой графикой/префабом: "+entry.id);
             if(entry.SeparateSprite && (profile.Opened.rect!=entry.openRect || profile.Opened.pixelsPerUnit!=entry.ppu ||
                 Vector2.Distance(profile.Opened.pivot,entry.openPivot)>.0001f))
@@ -93,7 +93,7 @@ namespace Remains.Editor
                 var prefab=Prefab(catalog,entry);
                 var profile=ScriptableObject.CreateInstance<ContainerArtworkProfileAsset>();profile.name=entry.id+"-artwork";
                 profile.Configure(entry.id,entry.Alternate?ContainerArtworkMode.ClosedOpened:ContainerArtworkMode.Static,prefab.Artwork.sprite,
-                    entry.Alternate?Opened(entry):null);AssetDatabase.CreateAsset(profile,ProfilePath(entry.id));
+                    entry.Alternate?Opened(entry):null,entry.wallMounted);AssetDatabase.CreateAsset(profile,ProfilePath(entry.id));
                 string path=AssetDatabase.GetAssetPath(prefab);var root=PrefabUtility.LoadPrefabContents(path);
                 try {root.GetComponent<PropView>().ConfigureContainerArtwork(profile);PrefabUtility.SaveAsPrefabAsset(root,path);}
                 finally {PrefabUtility.UnloadPrefabContents(root);}

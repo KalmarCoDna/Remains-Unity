@@ -10,16 +10,18 @@ namespace Remains.Content
         [SerializeField,InspectorName("Версия профиля")] private int version=1;
         [SerializeField,InspectorName("Исходный тип объекта")] private string definition;
         [SerializeField,InspectorName("Правило рисунка")] private ContainerArtworkMode mode;
+        [SerializeField,InspectorName("Крепление к стене")] private bool wallMounted;
         [SerializeField,InspectorName("Исходный / закрытый кадр")] private Sprite closed;
         [SerializeField,InspectorName("После первого просмотра")] private Sprite opened;
         public int Version=>version;
         public string Definition=>definition;
         public ContainerArtworkMode Mode=>mode;
+        public bool WallMounted=>wallMounted;
         public Sprite Closed=>closed;
         public Sprite Opened=>opened;
         public Sprite Select(bool wasOpened)=>mode==ContainerArtworkMode.ClosedOpened && wasOpened?opened:closed;
-        public void Configure(string id,ContainerArtworkMode policy,Sprite first,Sprite second=null)
-        {definition=id;mode=policy;closed=first;opened=second;version=1;Validate(id);}
+        public void Configure(string id,ContainerArtworkMode policy,Sprite first,Sprite second=null,bool wallMounted=false)
+        {definition=id;mode=policy;closed=first;opened=second;this.wallMounted=wallMounted;version=1;Validate(id);}
         public void Validate(string id)
         {
             if(version!=1 || string.IsNullOrWhiteSpace(definition) || definition!=id || closed==null ||

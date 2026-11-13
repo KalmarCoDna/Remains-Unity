@@ -15,5 +15,6 @@ MonoBehaviour:
   version: 1
   definition: wcup
   mode: 0
+  wallMounted: 1
   closed: {fileID: 21300000, guid: aa49352f73053734da902cb628bf4c7f, type: 3}
   opened: {fileID: 0}

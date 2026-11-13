@@ -110,7 +110,7 @@ namespace Remains.Editor
             if(sprite==null)throw new InvalidOperationException("Нет исходного спрайта контейнера: "+id);
             var profile=ScriptableObject.CreateInstance<ContainerArtworkProfileAsset>();
             // Multiple source frames alone do not establish an opening animation.
-            profile.Configure(id,ContainerArtworkMode.Static,sprite);AssetDatabase.CreateAsset(profile,path+"-art.asset");
+            profile.Configure(id,ContainerArtworkMode.Static,sprite,wallMounted:Number(xml,"wall")>0);AssetDatabase.CreateAsset(profile,path+"-art.asset");
             var material=WorldArtworkMaterial.Create(sprite.texture);AssetDatabase.CreateAsset(material,path+".mat");
             var asset=ScriptableObject.CreateInstance<PropAsset>();
             asset.SetDefinition(new PropDefinition {id=id,name=title,resource="FactoryLoot/"+id,width=sprite.bounds.size.x,height=sprite.bounds.size.y,

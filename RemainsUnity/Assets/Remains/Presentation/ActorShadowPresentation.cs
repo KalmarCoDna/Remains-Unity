@@ -35,7 +35,7 @@ namespace Remains.Presentation
         private readonly Dictionary<(WorldVisualKind Kind,string Id),Entry> entries=new();
         private readonly HashSet<(WorldVisualKind Kind,string Id)> retained=new();
         private readonly List<(WorldVisualKind Kind,string Id)> removed=new();
-        private readonly List<(WorldVisualKind Kind,string Id,Vector2 Center,LightOccluder Shape)> bodyCasters=new();
+        private readonly List<(WorldVisualKind Kind,string Id,Vector2 Center,LightOccluder Shape,bool WallMounted)> bodyCasters=new();
         private readonly HashSet<string> steadySources=new(StringComparer.Ordinal);
         private FactoryLevelView level;
         private Coroutine refresh;
@@ -111,7 +111,7 @@ namespace Remains.Presentation
                 var key=(caster.Kind,caster.Id);retained.Add(key);
                 var entry=GetEntry(key);
                 entry.Parts.Clear();entry.Parts.Add(caster.Shape);entry.Position=caster.Center;
-                Draw(entry,flashes,flashIds,worldLights,settings);
+                Draw(entry,flashes,flashIds,worldLights,settings,caster.WallMounted);
             }
             foreach(var pair in entries) if(!retained.Contains(pair.Key)) removed.Add(pair.Key);
             foreach(var key in removed) {Destroy(entries[key]);entries.Remove(key);}
@@ -132,7 +132,7 @@ namespace Remains.Presentation
                 Mathf.Max(1+(float)settings.ActorShadowDepth,(float)settings.ActorShadowMaxScale),bodyCasters);
 
         private void Draw(Entry entry,IReadOnlyList<SpriteEmission> flashes,IReadOnlyList<string> flashIds,
-            IReadOnlyList<WorldLightEmission> worldLights,RoomLightingTable settings)
+            IReadOnlyList<WorldLightEmission> worldLights,RoomLightingTable settings,bool wallMounted=false)
         {
             if(entry.Revision!=level.ShadowSourceRevision ||
                 (entry.Position-entry.SelectedAt).sqrMagnitude>=settings.ActorShadowMoveThreshold*settings.ActorShadowMoveThreshold)
@@ -159,7 +159,7 @@ namespace Remains.Presentation
                 if(Time.frameCount-cached.Value.Frame>4) entry.ExpiredFlashes.Add(cached.Key);
             foreach(string id in entry.ExpiredFlashes) entry.FlashVisibility.Remove(id);
             if(entry.Sources.Count>0 && entry.View.NeedsPreparation(entry.Parts,entry.Sources.Count)) entry.Queued=true;
-            using(Remains.Diagnostics.FrameHitchLog.Section("Тени: рисование проекции")) entry.View.Draw(entry.Position,entry.Parts,entry.Sources,settings);
+            using(Remains.Diagnostics.FrameHitchLog.Section("Тени: рисование проекции")) entry.View.Draw(entry.Position,entry.Parts,entry.Sources,settings,wallMounted);
         }
 
         private void AddTransient(Entry entry,string id,Vector2 position,float radius,float gain,float reach,RoomLightingTable settings)

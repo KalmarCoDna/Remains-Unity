@@ -106,7 +106,7 @@ namespace Remains.Editor
                     }
                     else
                     {
-                        var profile=ScriptableObject.CreateInstance<ContainerArtworkProfileAsset>();profile.Configure(e.id,ContainerArtworkMode.ClosedOpened,closed,opened);
+                        var profile=ScriptableObject.CreateInstance<ContainerArtworkProfileAsset>();profile.Configure(e.id,ContainerArtworkMode.ClosedOpened,closed,opened,wallMounted:e.id=="wallcab");
                         AssetDatabase.CreateAsset(profile,ProfilePath(e.id));var view=root.AddComponent<PropView>();view.SetArtwork(renderer);view.ConfigureContainerArtwork(profile);
                         if(!e.unity.hasPhysicalBody) view.ConfigurePlacementArtwork();
                         var prefab=PrefabUtility.SaveAsPrefabAsset(root,PrefabPath(e.id));Require(prefab!=null,"Не сохранён prefab: "+e.id);
@@ -174,7 +174,7 @@ namespace Remains.Editor
                 var asset=Load<PropAsset>(AssetPath(id));var view=prefab.GetComponent<PropView>();var profile=Load<ContainerArtworkProfileAsset>(ProfilePath(id));profile.Validate(id);
                 Require(StateJson.ToJson(asset.CreateDefinition())==StateJson.ToJson(Definition(id)) && asset.Prefab==view && view!=null && view.Artwork==renderer &&
                     view.ContainerArtwork==profile && view.VisualAnchor==(id=="cup"?PropVisualAnchor.BodyCenter:PropVisualAnchor.PlacementAnchor) && view.FitsStateWidth==(id=="cup") &&
-                    profile.Mode==ContainerArtworkMode.ClosedOpened && profile.Closed==renderer.sprite && profile.Opened==NativeSprite(entry.states[1]),"Изменён PropAsset/профиль/anchor: "+id);
+                    profile.Mode==ContainerArtworkMode.ClosedOpened && profile.Closed==renderer.sprite && profile.Opened==NativeSprite(entry.states[1]) && profile.WallMounted==(id=="wallcab"),"Изменён PropAsset/профиль/anchor: "+id);
             }
         }
         public static DoorAsset PlatformAsset=>Load<DoorAsset>(AssetPath("platform1"));
