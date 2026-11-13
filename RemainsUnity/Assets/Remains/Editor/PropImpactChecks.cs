@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Remains.Content;
 using Remains.Domain;
@@ -26,7 +26,7 @@ namespace Remains.Editor
         public static void Run()
         {
             Anatomy.Load();ActorTypes.Load();WeaponCatalog.Load();PropCatalog.Load();PropImpactCatalog.Load();
-            UnitsAndProfiles();AuthorityAndRecovery();MultipleVictims();SpatialAndScheduling();FullFactoryBudget();
+            UnitsAndProfiles();FastBoxSweep();AuthorityAndRecovery();MultipleVictims();SpatialAndScheduling();FullFactoryBudget();
             Debug.Log("PropImpactChecks: PASS — исходные единицы/пороги/две скорости, player-victim и Box-owner authority, source journal, epoch, cooldown, повтор/смена владельца/recovery, spatial pruning и неактивный уровень.");
         }
         private static void Require(bool value,string reason)
@@ -45,6 +45,62 @@ namespace Remains.Editor
             var prop=world.props[0];var sample=new PropImpactSample {world=world.worldId,prop=prop.id,owner=prop.owner,level=prop.level,
                 generation=prop.generation,sequence=sequence,x=prop.x,y=prop.y,vx=prop.vx,vy=prop.vy};
             sample.id=PropImpactRules.SampleId(world.worldId,prop.id,prop.generation,sequence);return sample;
+        }
+        private static void FastBoxSweep()
+        {
+            var room=new RoomLayout {left=-10,right=10,bottom=-4,top=8,platforms=Array.Empty<RoomSurface>()};
+            var world=World();var box=world.props[0];var player=world.Find("player");
+            world.actors.Add(new ActorState {id="source-player",player=true,connected=true,owner=box.owner,level=box.level,x=-4,health=100});
+            var context=new FreePropMotionContext(trackSupport:true);
+            const float dt=1f/30;
+            void Launch()
+            {
+                box.x=-1.5f;box.y=.3f;box.width=box.height=.5f;box.vx=90;box.vy=0;
+                FreePropMotion.Step(world,box.owner,dt,_=>room,_=>false,null,null,context);
+            }
+            Launch();
+            Require(context.ImpactSources.Count==1,"Быстрый ящик не передал путь из шага свободного движения");
+            var motion=context.ImpactSources[0];var request=Source(world);
+            request.path=new PropImpactPath {startX=motion.origin.x,startY=motion.origin.y,cornerY=motion.corner.y,seconds=motion.seconds};
+            var admission=new PropImpactPlausibility(12,14,_=>room);
+            Require(admission.Sample(box,request,out _),"Хост отклонил штатный путь быстрого ящика");
+            Require(PropImpactRules.AcceptSample(world,box,box.owner,request,10,out var source),"Хост не зарегистрировал быстрый путь");
+            var point=StateJson.Copy(source);point.path=null;
+            Require(!PropImpactRules.Contact(point,player),"Конечная точка должна быть за игроком");
+            Require(PropImpactRules.Contact(source,player),"Фактическая траектория пропустила игрока между позами");
+            var index=new PropImpactSpatialIndex();index.Add(source);
+            var found=new List<PropImpactSample>();index.Query(player.level,new Rect(-.5f,0,1,1),found);
+            Require(found.Count==1 && found[0]==source,"Индекс должен находить путь, пересекающий бакет игрока");
+            player.y=2;
+            Require(!PropImpactRules.Contact(source,player),"Ящик попал в цель вне фактической траектории");
+            player.y=0;
+            var elbow=StateJson.Copy(source);elbow.path.startY=3;elbow.path.cornerY=3;
+            Require(elbow.Bounds.Overlaps(new Rect(-.5f,0,1,1)) && !PropImpactRules.Contact(elbow,player),
+                "Прямоугольник всей траектории не должен засчитывать диагональный срез");
+            var malformed=StateJson.Copy(request);malformed.path.startX=-8;
+            Require(!admission.Sample(box,malformed,out _),"Хост принял слишком длинный путь внутри уровня");
+            malformed=StateJson.Copy(request);malformed.path.seconds=0;
+            Require(!admission.Sample(box,malformed,out _),"Хост принял путь с нулевым временем");
+            var friendly=StateJson.Copy(source);friendly.friendlyPlayers=true;
+            Require(!PropImpactRules.Contact(friendly,player),"Новый путь обошёл фильтр защищённых игроков");
+            Require(!PropImpactRules.CanReport(source,player,box.owner) && PropImpactRules.CanReport(source,player,player.owner),
+                "Контакт с игроком принимает владелец жертвы");
+            var contact=PropImpactRules.Prepare(world,box,source,player,new PropImpactBody(50,1,20d/30),Vector2.zero,10);
+            Require(contact!=null && contact.damage>0,"Зарегистрированный путь не дал контакт с уроном");
+            PropImpactRules.Commit(world,box,player,contact);
+            var receiver=new DamageReceiver(new NeverWeapon(),null,new NoProtection());
+            Require(receiver.ApplyPhysical(player,contact) && player.health<1000 && !receiver.ApplyPhysical(player,contact),
+                "Урон от контакта должен применяться ровно один раз");
+            PropImpactRules.Validate(StateJson.Copy(contact));
+
+            room.platforms=new[]{new RoomSurface {x=-.8f,y=-1,width=.1f,height=3}};
+            Launch();
+            Require(context.ImpactSources.Count==1,"Стена остановила опасное движение до порога теста");
+            motion=context.ImpactSources[0];
+            var blocked=StateJson.Copy(source);blocked.x=motion.position.x;blocked.y=motion.position.y;
+            blocked.path=new PropImpactPath {startX=motion.origin.x,startY=motion.origin.y,cornerY=motion.corner.y,seconds=motion.seconds};
+            Require(box.x<-.8f && !PropImpactRules.Contact(blocked,player),"Путь ящика зашёл за стену, остановившую тело");
+            Debug.Log(FormattableString.Invariant($"Fast Box sweep: PASS — speed={source.Velocity.magnitude:F2}, path={source.path.startX:F2}..{source.x:F2}, damage={contact.damage:F2}; point misses, sweep hits, wall clips, duplicate rejected."));
         }
         private static void UnitsAndProfiles()
         {
@@ -151,6 +207,7 @@ namespace Remains.Editor
             // Actual old JSON: protocol 75/76 had neither generationBefore nor targetFixed.
             var legacyJson=Newtonsoft.Json.Linq.JObject.Parse(StateJson.ToJson(a));
             legacyJson.Remove("generationBefore");legacyJson.Remove("targetFixed");
+            Require(legacyJson["source"]["path"]==null,"Старые сохранения точечных контактов не должны получать поле пути.");
             var legacy=StateJson.FromJson<PropImpactContact>(legacyJson.ToString());
             PropImpactRules.Validate(legacy);
             Require(legacy.generationBefore==source.generation && !legacy.targetFixed && legacy.damage==a.damage,

@@ -45,6 +45,20 @@ namespace Remains.Domain
             float travel=PoseWindow*Mathf.Max(velocity.magnitude,canonical.magnitude)+hull;
             if(Vector2.Distance(position,prop.Position)>travel)
             {reason="Позиция образца не соответствует последней принятой позе Box.";return false;}
+            if(sample.path is { } path)
+            {
+                var corner=path.Corner(position.x);
+                float distance=Vector2.Distance(path.Start,corner)+Mathf.Abs(corner.y-position.y);
+                // Validate the observed displacement and the extra travel on slopes separately.
+                var delta=position-path.Start;
+                float travelLimit=limits.speed*path.seconds;
+                if(!path.Valid || !bounds.Contains(path.Start) || !bounds.Contains(corner) ||
+                    delta.sqrMagnitude>travelLimit*travelLimit ||
+                    !float.IsFinite(distance) || distance>2*travelLimit)
+                {reason="Путь образца не соответствует физическому шагу Box.";return false;}
+                if(Vector2.Distance(path.Start,prop.Position)>travel+distance)
+                {reason="Начало пути образца не соответствует последней принятой позе Box.";return false;}
+            }
             reason=null;return true;
         }
         public bool Target(ActorState actor,Vector2 reported,float knocked,out Vector2 canonical,out string reason)

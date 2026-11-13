@@ -9,7 +9,7 @@ namespace Remains.Gameplay
     public sealed class PropImpactController
     {
         private readonly CoopSession session;
-        private readonly Dictionary<string,(int generation,uint sequence,double next)> publishers=new(StringComparer.Ordinal);
+        private readonly Dictionary<string,(int generation,uint sequence)> publishers=new(StringComparer.Ordinal);
         private readonly List<string> removed=new();
         private PropImpactTargetIndex Targets=>session.PropImpacts.Targets;
         private readonly List<PropImpactSample> candidates=new();
@@ -40,17 +40,18 @@ namespace Remains.Gameplay
                 var prop=captured.prop;
                 if(prop.owner!=owner || !context.Running(prop.level) || prop.held || !PropImpactRules.IsBox(prop) ||
                     !PropImpactRules.Dangerous(captured.velocity) || !session.LevelTime.HasLocal(prop.level)) continue;
-                var area=new Rect(captured.position.x-prop.width*.5f,captured.position.y-prop.anchorHeight,prop.width,prop.height);
+                // Every eligible physics step owns its segment; throttling these would leave holes in the path.
+                var area=PropImpactPath.Bounds(captured.origin,captured.corner.y,captured.position,prop.width,prop.height,prop.anchorHeight);
                 if(!Targets.IntersectsActiveZone(prop.level,area)) continue;
-                double now=session.LevelTime.ReadLocal(prop.level);
+                var path=new PropImpactPath {startX=captured.origin.x,startY=captured.origin.y,cornerY=captured.corner.y,seconds=captured.seconds};
+                if(!path.Valid) continue;
                 publishers.TryGetValue(prop.id,out var sent);
-                if(sent.generation==prop.generation && now<sent.next) continue;
                 uint sequence=PropImpactRules.NextSampleSequence(prop,sent.generation,sent.sequence);
                 if(sequence==0) throw new InvalidOperationException("Исчерпан номер образца Box: "+prop.id);
                 var sample=new PropImpactSample {world=world,prop=prop.id,owner=owner,level=prop.level,generation=prop.generation,sequence=sequence,
-                    x=captured.position.x,y=captured.position.y,vx=captured.velocity.x,vy=captured.velocity.y};
+                    x=captured.position.x,y=captured.position.y,vx=captured.velocity.x,vy=captured.velocity.y,path=path};
                 sample.id=PropImpactRules.SampleId(world,prop.id,prop.generation,sequence);
-                session.PropImpacts.Publish(sample);publishers[prop.id]=(prop.generation,sequence,now+1d/30);
+                session.PropImpacts.Publish(sample);publishers[prop.id]=(prop.generation,sequence);
             }
             bool pending=false;
             foreach(string level in Targets.Levels)
