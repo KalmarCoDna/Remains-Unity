@@ -28,13 +28,16 @@ namespace Remains.Domain
             if(InventoryJournal.Count(healer,"heal")<=0) return "Нет доступной аптечки.";
             return null;
         }
+        public static bool RevivalPathClear(RoomLayout room,ActorState healer,ActorState target)
+            =>RoomVisibility.Clear(room,InventorySource.BodyBounds(healer).center,InventorySource.BodyBounds(target).center);
         // An NPC's full health: its factory level profile; 0 when unknown (outside the factory's scaled placements).
         public static float NpcHealthLimit(ActorState npc)=>npc.factoryEnemy?.maxHealth>0?npc.factoryEnemy.maxHealth:0;
         // Canonical coordinator entry point; legacy local Apply overloads remain available.
-        public static bool ApplyOnce(WorldState world,ActorState healer,ActorState target,bool selfHeal,string itemId,string transaction)
+        public static bool ApplyOnce(WorldState world,ActorState healer,ActorState target,bool selfHeal,string itemId,string transaction,RoomLayout room=null)
         {
             if(world==null || string.IsNullOrWhiteSpace(transaction) || !world.actors.Contains(healer) || !world.actors.Contains(target)) return false;
             if(world.completedTransactions.Contains(transaction)) return true;
+            if(!selfHeal && room!=null && !RevivalPathClear(room,healer,target)) return false;
             if(!Apply(healer,target,selfHeal,itemId)) return false;
             world.completedTransactions.Add(transaction);world.revision++;return true;
         }

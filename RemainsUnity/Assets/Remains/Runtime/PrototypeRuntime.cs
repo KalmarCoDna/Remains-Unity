@@ -216,7 +216,7 @@ namespace Remains.Runtime
             if(Options.Diagnostics || Options.Smoke!=null)
                 gameObject.AddComponent<SessionTimingDiagnostics>().Initialize(this);
             Combat.DamageApplied+=DamageFeedback.Publish;
-            Revival=new RevivalController(Session);
+            Revival=new RevivalController(Session,Geometry);
             Interactions=new InteractionAdapter(Session,Geometry.Find);
             Grenades=new GrenadeController(Session,Interactions,Combat,Geometry);
             Telekinesis=new TelekinesisController(Session,Interactions,Geometry,Grenades);
@@ -836,10 +836,11 @@ namespace Remains.Runtime
                 !UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject()))) lastGameplayAim=command.aim;
             if(command.inventory) hud?.ToggleInventory();
             if(command.menu) hud?.ToggleMenu();
+            var interactionRoom=Geometry.Get(actor.level);
             InteractionFocus.Step(Session.World,actor,Session.Rules,command.hasAim?command.aim:(Vector2?)null,
                 IsLevelPreparing || Session.Travel.Pending || hud?.BlocksGameplayInput==true || command.hasPointer &&
                     (hud?.BlocksPointerGameplay(command.pointer)==true || UnityEngine.EventSystems.EventSystem.current?.IsPointerOverGameObject()==true),
-                Session.Travel.Points(actor.level),MechanismInteraction.Points,Geometry.Get(actor.level).beds);
+                Session.Travel.Points(actor.level),MechanismInteraction.Points,interactionRoom.beds,interactionRoom);
             MechanismInteraction.Step(InteractionFocus.Target,command.interact,command.revive,
                 !IsLevelPreparing && !Session.Travel.Pending && hud?.BlocksGameplayInput!=true && hud?.ContainerOpen!=true,dt);
             if(command.interact && !Session.Travel.Pending)

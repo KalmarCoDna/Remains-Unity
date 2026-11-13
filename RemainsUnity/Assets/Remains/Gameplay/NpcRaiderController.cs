@@ -138,7 +138,7 @@ namespace Remains.Gameplay
             else NpcWeaponAim.Apply(actor,sees?target.BodyPosition+Vector2.up*.55f:memory.hasKnownPosition?memory.KnownPosition+Vector2.up*.55f:null,room);
             // UnitZombie.animate: trot while searching on the move.
             if(settings.zombie && entry.mind.state==RaiderState.Search && actor.pose is "walk" or "run") ActorPose.Select(actor,"trot");
-            return new RaiderActions(weapon,bodyHit,changed,Revive(entry,actor,ally,decided.revive,dt),Heal(entry,actor,decided.heal),
+            return new RaiderActions(weapon,bodyHit,changed,Revive(entry,actor,ally,decided.revive,dt,room),Heal(entry,actor,decided.heal),
                 decided.grenade && sees && GrenadeItems.Next(actor) is { } grenade?
                     GrenadeAim.Plan(room,actor.BodyPosition+Vector2.up*ThrowLift,actor.BodyPosition,target.BodyPosition,decided.grenadeError,random,grenade.definition):default);
         }
@@ -194,10 +194,10 @@ namespace Remains.Gameplay
         }
 
         // RevivalSeconds over the ally, as a player's hold of E; then one request until the host answers or 5 s pass.
-        private ActorState Revive(Entry entry,ActorState actor,ActorState ally,bool working,float dt)
+        private ActorState Revive(Entry entry,ActorState actor,ActorState ally,bool working,float dt,RoomLayout room)
         {
             if(entry.revivalPending>time) return null;
-            if(!entry.revival.Step(actor,ally,working && ally!=null,dt)) return null;
+            if(!entry.revival.Step(actor,ally,working && ally!=null,dt,room)) return null;
             entry.revival.Reset();entry.revivalPending=time+5;
             return ally;
         }

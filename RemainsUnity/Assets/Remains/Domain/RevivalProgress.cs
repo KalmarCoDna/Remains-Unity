@@ -7,9 +7,10 @@ namespace Remains.Domain
         private float elapsed;
         public float Progress=>elapsed/HealingRules.RevivalSeconds;
         public void Reset() {healerId=null;targetId=null;elapsed=0;}
-        public bool Step(ActorState healer,ActorState target,bool held,float dt)
+        public bool Step(ActorState healer,ActorState target,bool held,float dt,RoomLayout room=null)
         {
-            if(!held || !HealingRules.CanApply(healer,target,false)) {Reset();return false;}
+            if(!held || !HealingRules.CanApply(healer,target,false) ||
+                room!=null && !HealingRules.RevivalPathClear(room,healer,target)) {Reset();return false;}
             if(healerId!=null && (healer.id!=healerId || healer.generation!=healerGeneration || healer.lifecycleSequence!=healerLifecycle ||
                 target.id!=targetId || target.generation!=targetGeneration || target.lifecycleSequence!=targetLifecycle || healer.damageSequence!=damageSequence))
             {Reset();return false;}
