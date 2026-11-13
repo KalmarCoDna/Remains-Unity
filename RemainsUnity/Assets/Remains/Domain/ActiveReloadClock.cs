@@ -14,6 +14,7 @@ namespace Remains.Domain
         public float WindowWidth {get;private set;}
         public float Progress=>duration>0?(float)(elapsed/duration):1;
         public float Remaining=>(float)Math.Max(0,duration-elapsed);
+        public bool InWindow=>Running && Opportunity && elapsed/duration>=WindowStart && elapsed/duration<=WindowStart+WindowWidth;
 
         public static void ValidateWindow(float start,float width)
         {
@@ -38,9 +39,9 @@ namespace Remains.Domain
         {
             if(!Running || !Opportunity) return ActiveReloadAttempt.Ignored;
             // Compare elapsed time, not a frame index; coarse/fine simulation obeys the same interval.
-            double progress=elapsed/duration;
+            bool success=InWindow;
             Opportunity=false;
-            if(progress>=WindowStart && progress<=WindowStart+WindowWidth)
+            if(success)
             {elapsed=duration;Running=false;return ActiveReloadAttempt.Succeeded;}
             elapsed=0;
             return ActiveReloadAttempt.Missed;

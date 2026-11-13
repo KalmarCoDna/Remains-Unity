@@ -128,7 +128,22 @@ namespace Remains.Runtime
             if(lampTarget!=null)command.aim=lampAim;
             var selected=WeaponInventory.Selected(actor);
             if(selected?.definition!="pistol") return command;
-            if(selected.weaponState.rounds==0) {command.reload=true;return command;}
+            var reload=runtime.Combat.Reload;
+            if(reload.Active)
+            {
+                var clock=reload.Clock;
+                if(clock.InWindow)
+                {
+                    command.reload=true;
+                    Debug.Log($"CPU seed104: R в окне активной перезарядки, progress={clock.Progress:F3}, window={clock.WindowStart:F3}..{clock.WindowStart+clock.WindowWidth:F3}.");
+                }
+                return command;
+            }
+            if(selected.weaponState.rounds==0)
+            {
+                command.reload=WeaponAmmunition.ReloadAmount(actor,WeaponCatalog.Get(selected.definition))>0;
+                return command;
+            }
             if(Time.unscaledTimeAsDouble>=nextShot)
             {nextShot=Time.unscaledTimeAsDouble+.35;command.fire=true;}
             return command;
