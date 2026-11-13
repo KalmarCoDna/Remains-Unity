@@ -12,18 +12,24 @@ namespace Remains.Domain
         }
         // A simulation owner reuses this scratch hull; it never belongs to saved state.
         public static void Step(PropState prop,RoomLayout room,float dt,Vector2? target,IEnumerable<PropState> neighbours,PassengerMotionState passenger,MovementHull hull)
+            =>Step(prop,room,dt,target,neighbours,passenger,hull,out _,out _);
+
+        internal static void Step(PropState prop,RoomLayout room,float dt,Vector2? target,IEnumerable<PropState> neighbours,
+            PassengerMotionState passenger,MovementHull hull,out Vector2 origin,out Vector2 corner)
         {
+            origin=corner=prop.Position;
             if(dt<=0 || !prop.movable || !prop.hasPhysicalBody) return;
             var feet=prop.Position-Vector2.up*prop.anchorHeight;
             hull.width=prop.width;hull.height=prop.height;
             feet=PassengerMotion.Carry(room,hull,feet,dt,passenger,!target.HasValue && !prop.held && prop.vy<=0);
             prop.Position=feet+Vector2.up*prop.anchorHeight;
-            var origin=prop.Position; // Relative velocity excludes the support displacement; no feedback/drift.
+            origin=prop.Position; // Relative velocity excludes the support displacement; no feedback/drift.
             Vector2 delta;
             if(target.HasValue) delta=TelekinesisFollow.Displacement(origin,target.Value,dt);
             else {prop.vy-=WorldPhysics.Gravity*dt;delta=new Vector2(prop.vx,prop.vy)*dt;}
             bool lowerThroughPlatform=target.HasValue && delta.y<0;
-            var moved=ActorTerrainMotion.Move(room,hull,feet,delta,ignoreOneWay:lowerThroughPlatform,bodyTops:false);
+            var moved=ActorTerrainMotion.Move(room,hull,feet,delta,lowerThroughPlatform,null,null,false,false,out var cornerFeet);
+            corner=cornerFeet+Vector2.up*prop.anchorHeight;
             bool supportedByProp=PropSupport.Resolve(prop,feet,ref moved,neighbours);
             prop.Position=moved+Vector2.up*prop.anchorHeight;
             var velocity=(prop.Position-origin)/dt;prop.vx=velocity.x;prop.vy=velocity.y;

@@ -37,9 +37,10 @@ namespace Remains.Gameplay
                 if(context.Sleeping(prop,room,dt)) {sleeping++;publish?.Invoke(prop);continue;}
                 var passenger=room.dynamicSurfaces?.Count>0?passengers?.ForProp(prop):null;
                 float previousX=prop.x,previousY=prop.y;
-                PropMotion.Step(prop,room,dt,null,context.Support,passenger,context.Hull);
-                if(PropImpactRules.IsBox(prop) && PropImpactRules.Dangerous(new Vector2(prop.vx,prop.vy)))
-                    context.ImpactSources.Add((prop,prop.Position,new Vector2(prop.vx,prop.vy)));
+                PropMotion.Step(prop,room,dt,null,context.Support,passenger,context.Hull,out var origin,out var corner);
+                var velocity=new Vector2(prop.vx,prop.vy);
+                if(PropImpactRules.IsBox(prop) && PropImpactRules.Dangerous(velocity))
+                    context.AddImpactSource((prop,origin,corner,prop.Position,velocity,dt));
                 context.Support.Moved(prop,previousX);
                 bool fellAsleep=context.Settle(prop,room,previousX,previousY,passenger);
                 moved?.Invoke(prop,new Vector2(previousX,previousY));
@@ -156,7 +157,10 @@ namespace Remains.Gameplay
         }
         internal readonly MovementHull Hull=new();
         internal readonly PropSupportIndex Support=new();
-        internal readonly List<(PropState prop,Vector2 position,Vector2 velocity)> ImpactSources=new();
+        private readonly List<(PropState prop,Vector2 origin,Vector2 corner,Vector2 position,Vector2 velocity,float seconds)> impactSources=new();
+        public IReadOnlyList<(PropState prop,Vector2 origin,Vector2 corner,Vector2 position,Vector2 velocity,float seconds)> ImpactSources=>impactSources;
+        internal void AddImpactSource((PropState prop,Vector2 origin,Vector2 corner,Vector2 position,Vector2 velocity,float seconds) source)
+            =>impactSources.Add(source);
         internal WorldPropView Props {get;private set;}
         internal IReadOnlyList<PropState> Scheduled=>trackSupport?scheduled:Props;
         private static bool Disturbed(PropState prop,Rest state)=>prop.held || prop.generation!=state.generation ||
@@ -189,7 +193,7 @@ namespace Remains.Gameplay
         }
         internal void Prepare(WorldState world,string localOwner,Func<string,bool> isPaused,IReadOnlyList<ActorState> connectedPlayers)
         {
-            ImpactSources.Clear();
+            impactSources.Clear();
             if(Props?.World!=world) {Props=new WorldPropView(world);supportDirty=true;}
             if(trackedOwner!=localOwner) {trackedOwner=localOwner;supportDirty=true;}
             levels.Clear();rooms.Clear();movingPlatforms.Clear();

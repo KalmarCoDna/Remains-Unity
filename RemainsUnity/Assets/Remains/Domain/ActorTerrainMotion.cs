@@ -25,6 +25,10 @@ namespace Remains.Domain
 
         internal static Vector2 Move(RoomLayout room,MovementHull hull,Vector2 start,Vector2 delta,bool ignoreOneWay,float? droppedSurface,
             RoomSurface excludedSurface,bool bodyTops,bool keepFlatPath)
+            =>Move(room,hull,start,delta,ignoreOneWay,droppedSurface,excludedSurface,bodyTops,keepFlatPath,out _);
+
+        internal static Vector2 Move(RoomLayout room,MovementHull hull,Vector2 start,Vector2 delta,bool ignoreOneWay,float? droppedSurface,
+            RoomSurface excludedSurface,bool bodyTops,bool keepFlatPath,out Vector2 corner)
         {
             float half=hull.width*.5f;
             float x=Mathf.Clamp(start.x+delta.x,room.left+half,room.right-half);
@@ -54,6 +58,7 @@ namespace Remains.Domain
                 if(delta.y<=0 && !(ignoreOneWay && surface.oneWay) && baseY>=floor-Epsilon && y<floor) y=floor;
                 if(delta.y>0 && !surface.oneWay && start.y<=ceiling+Epsilon && y>ceiling) y=ceiling;
             }
+            corner=new Vector2(x,baseY);
             return new Vector2(x,y);
         }
         public static bool Supported(RoomLayout room,MovementHull hull,Vector2 position,bool bodyTops=true)

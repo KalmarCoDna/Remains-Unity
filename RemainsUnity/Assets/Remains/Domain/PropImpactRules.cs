@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using Remains.Serialization;
@@ -13,8 +13,25 @@ namespace Remains.Domain
         public double at;
         public float x,y,vx,vy,width,height,anchorHeight,mass;
         public bool friendlyPlayers;
+        [Newtonsoft.Json.JsonProperty(NullValueHandling=Newtonsoft.Json.NullValueHandling.Ignore)]
+        public PropImpactPath path;
         public Vector2 Velocity=>new(vx,vy);
-        public Rect Bounds=>new(x-width*.5f,y-anchorHeight,width,height);
+        public Rect Bounds=>path==null?new Rect(x-width*.5f,y-anchorHeight,width,height):PropImpactPath.Bounds(path.Start,path.cornerY,new Vector2(x,y),width,height,anchorHeight);
+    }
+    [Serializable] public sealed class PropImpactPath
+    {
+        private const float MaximumStepSeconds=1f/3f; // Project's Maximum Allowed Timestep.
+        public float startX,startY,cornerY,seconds;
+        public Vector2 Start=>new(startX,startY);
+        public Vector2 Corner(float endX)=>new(endX,cornerY);
+        public static Rect Bounds(Vector2 start,float cornerY,Vector2 end,float width,float height,float anchorHeight)
+        {
+            float half=width*.5f;
+            return Rect.MinMaxRect(Mathf.Min(start.x,end.x)-half,Mathf.Min(start.y,Mathf.Min(cornerY,end.y))-anchorHeight,
+                Mathf.Max(start.x,end.x)+half,Mathf.Max(start.y,Mathf.Max(cornerY,end.y))+height-anchorHeight);
+        }
+        public bool Valid=>float.IsFinite(startX) && float.IsFinite(startY) && float.IsFinite(cornerY) &&
+            float.IsFinite(seconds) && seconds>0 && seconds<=MaximumStepSeconds;
     }
     [Serializable] public sealed class PropImpactContact
     {
@@ -76,7 +93,18 @@ namespace Remains.Domain
             if(sample==null || target==null || sample.level!=target.level || target.health<=0 ||
                 !ActorPresence.IsPresent(target) || ActorPresence.Hidden(target) || sample.friendlyPlayers && target.player) return false;
             var hull=Anatomy.Movement(target);
-            return sample.Bounds.Overlaps(new Rect(target.x-hull.width*.5f,target.y,hull.width,hull.height));
+            var body=new Rect(target.x-hull.width*.5f,target.y,hull.width,hull.height);
+            if(!sample.Bounds.Overlaps(body)) return false;
+            if(sample.path==null) return true;
+            // Sweep the box anchor through the Minkowski-expanded body. A small inset preserves
+            // strict overlap at edges, e.g. when the box travels on the floor below a body.
+            const float inset=.0001f;
+            float half=sample.width*.5f;
+            var expanded=Rect.MinMaxRect(body.xMin-half+inset,body.yMin-sample.height+sample.anchorHeight+inset,
+                body.xMax+half-inset,body.yMax+sample.anchorHeight-inset);
+            var corner=sample.path.Corner(sample.x);
+            return SurfaceContact.Entry(expanded,sample.path.Start,corner).HasValue ||
+                SurfaceContact.Entry(expanded,corner,new Vector2(sample.x,sample.y)).HasValue;
         }
         public static bool Valid(PropImpactSample sample)=>sample!=null && !string.IsNullOrEmpty(sample.id) &&
             !string.IsNullOrEmpty(sample.world) && !string.IsNullOrEmpty(sample.prop) && !string.IsNullOrEmpty(sample.owner) &&
@@ -85,7 +113,7 @@ namespace Remains.Domain
             float.IsFinite(sample.width) && sample.width>0 && float.IsFinite(sample.height) && sample.height>0 &&
             float.IsFinite(sample.anchorHeight) && sample.anchorHeight>=0 && sample.anchorHeight<=sample.height &&
             float.IsFinite(sample.mass) && sample.mass>0 && double.IsFinite(sample.at) && sample.at>=0 &&
-            sample.id==SampleId(sample.world,sample.prop,sample.generation,sample.sequence);
+            (sample.path==null || sample.path.Valid) && sample.id==SampleId(sample.world,sample.prop,sample.generation,sample.sequence);
         public static string SampleId(string world,string prop,int generation,uint sequence)=>$"box:{world}:{prop}:{generation}:{sequence}";
         public static bool AcceptSample(WorldState world,PropState prop,string owner,PropImpactSample incoming,double now,out PropImpactSample accepted)
         {
@@ -93,7 +121,8 @@ namespace Remains.Domain
             if(world==null || !IsBox(prop) || prop.held || prop.owner!=owner || incoming==null || incoming.world!=world.worldId ||
                 incoming.prop!=prop.id || incoming.owner!=owner || incoming.generation!=prop.generation || incoming.level!=prop.level ||
                 incoming.id!=SampleId(world.worldId,prop.id,prop.generation,incoming.sequence) ||
-                !float.IsFinite(incoming.x) || !float.IsFinite(incoming.y) || !Dangerous(incoming.Velocity) || !double.IsFinite(now) || now<0) return false;
+                !float.IsFinite(incoming.x) || !float.IsFinite(incoming.y) || incoming.path!=null && !incoming.path.Valid ||
+                !Dangerous(incoming.Velocity) || !double.IsFinite(now) || now<0) return false;
             var journal=prop.impacts;
             foreach(var sample in journal?.samples??new List<PropImpactSample>())
                 if(sample.id==incoming.id) {accepted=sample;return true;}
