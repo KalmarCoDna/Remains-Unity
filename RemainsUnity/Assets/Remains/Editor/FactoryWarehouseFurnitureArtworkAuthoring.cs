@@ -75,7 +75,7 @@ namespace Remains.Editor
                 var closed=NativeSprite(entry,entry.states[0]);
                 var opened=entry.states.Length==2?NativeSprite(entry,entry.states[1]):null;
                 var profile=ScriptableObject.CreateInstance<ContainerArtworkProfileAsset>();profile.name=entry.id+"-artwork";
-                profile.Configure(entry.id,opened!=null?ContainerArtworkMode.ClosedOpened:ContainerArtworkMode.Static,closed,opened);
+                profile.Configure(entry.id,opened!=null?ContainerArtworkMode.ClosedOpened:ContainerArtworkMode.Static,closed,opened,wallMounted:entry.id==LockerId);
                 AssetDatabase.CreateAsset(profile,ProfilePath(entry.id));
                 var material=WorldArtworkMaterial.Create(closed.texture);material.name=entry.id;
                 AssetDatabase.CreateAsset(material,MaterialPath(entry.id));
@@ -179,7 +179,7 @@ namespace Remains.Editor
             Require(StateJson.ToJson(actual)==StateJson.ToJson(expected),"Сохранённое определение изменено; замена запрещена: "+entry.id);
             profile.Validate(entry.id);var closed=NativeSprite(entry,entry.states[0]);var opened=entry.states.Length==2?NativeSprite(entry,entry.states[1]):null;
             Require(profile.Closed==closed && profile.Opened==opened && profile.Mode==(opened!=null?ContainerArtworkMode.ClosedOpened:ContainerArtworkMode.Static) &&
-                profile.Select(false)==closed && profile.Select(true)==(opened??closed),"Профиль расходится с actual source frames: "+entry.id);
+                profile.Select(false)==closed && profile.Select(true)==(opened??closed) && profile.WallMounted==(entry.id==LockerId),"Профиль расходится с actual source frames: "+entry.id);
             var view=asset.Prefab;var renderer=view?.Artwork;
             Require(view!=null && view.gameObject==prefab && renderer!=null && renderer.transform==prefab.transform && view.ContainerArtwork==profile &&
                 renderer.sprite==closed && renderer.sharedMaterial==material && material.mainTexture==closed.texture && material.shader==GameAssets.Load<Shader>("Presentation/WorldLit") &&

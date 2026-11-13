@@ -23,6 +23,7 @@ namespace Remains.Presentation
     {
         public const string ResourcePath="Presentation/ActorCastShadow";
         public const int ShadowOrder=1,MaskResolution=256;
+        internal const float WallContactOffset=.08f,WallContactDepth=.025f;
         [SerializeField,InspectorName("Материал маски и тени")] private Material shadowMaterial;
         private readonly List<Slot> slots=new();
         private readonly Dictionary<Sprite,Mesh> spriteMeshes=new();
@@ -128,7 +129,7 @@ namespace Remains.Presentation
             hasSignature=false;
         }
 
-        public void Draw(Vector2 actorPosition,IReadOnlyList<LightOccluder> parts,IReadOnlyList<ActorShadowSource> sources,RoomLightingTable settings)
+        public void Draw(Vector2 actorPosition,IReadOnlyList<LightOccluder> parts,IReadOnlyList<ActorShadowSource> sources,RoomLightingTable settings,bool wallMounted=false)
         {
             Validate();
             if(parts==null || sources==null || settings==null) throw new ArgumentNullException("Нет силуэтов, источников или настроек проекции тени.");
@@ -136,7 +137,7 @@ namespace Remains.Presentation
             // A queued first/new-content preparation deliberately leaves no projection for this pose.
             // Never allocate render targets or generate sprite topology in the per-pose callback.
             if(NeedsPreparation(parts,sources.Count)) {Clear();return;}
-            int signature=Signature(actorPosition,parts,sources,settings);
+            int signature=Signature(actorPosition,parts,sources,settings,wallMounted);
             if(hasSignature && signature==lastSignature) return;
             int poseSignature=PoseSignature(parts);
             if(!hasPoseMask || lastPoseSignature!=poseSignature)
@@ -154,6 +155,14 @@ namespace Remains.Presentation
             }
             // The selector limits steady lamps. Transient flashes appended by the caller must remain visible.
             int count=sources.Count;
+            float maxOffset=(float)settings.ActorShadowMaxOffset;
+            float depth=(float)settings.ActorShadowDepth,maxScale=(float)settings.ActorShadowMaxScale;
+            if(wallMounted)
+            {
+                maxOffset=Mathf.Min(maxOffset,WallContactOffset);
+                depth=Mathf.Min(depth,WallContactDepth);
+                maxScale=Mathf.Min(maxScale,1+WallContactDepth);
+            }
             ActiveSourceCount=0;
             for(int i=0;i<count;i++)
             {
@@ -163,8 +172,8 @@ namespace Remains.Presentation
                 float opacity=Mathf.Clamp01((float)settings.ActorShadowMaxOpacity)*Mathf.Clamp01(source.Coverage);
                 if(source.Strength<=0 || opacity<=0 || parts.Count==0) continue;
                 var projection=source.IsTransient
-                    ?TransientProjection(actorPosition,source.Position,source.ProjectionScale,(float)settings.ActorShadowMaxScale,(float)settings.ActorShadowMaxOffset)
-                    :Projection(actorPosition,source.Position,(float)settings.ActorShadowDepth,(float)settings.ActorShadowMaxOffset);
+                    ?TransientProjection(actorPosition,source.Position,source.ProjectionScale,maxScale,maxOffset)
+                    :Projection(actorPosition,source.Position,depth,maxOffset);
                 float blur=WallPenumbra(source.Radius,projection.m00);
                 bool hasBounds=false;Bounds bounds=default;
                 ExpandBounds(ref bounds,ref hasBounds,poseBounds,projection);
@@ -182,12 +191,12 @@ namespace Remains.Presentation
             for(int i=ActiveSourceCount;i<slots.Count;i++) slots[i].renderer.enabled=false;
             lastSignature=signature;hasSignature=true;MaskRebuilds++;
         }
-        private int Signature(Vector2 actorPosition,IReadOnlyList<LightOccluder> parts,IReadOnlyList<ActorShadowSource> sources,RoomLightingTable settings)
+        private int Signature(Vector2 actorPosition,IReadOnlyList<LightOccluder> parts,IReadOnlyList<ActorShadowSource> sources,RoomLightingTable settings,bool wallMounted)
         {
             var hash=new HashCode();hash.Add(actorPosition);hash.Add(transform.localToWorldMatrix);
             hash.Add(settings.ActorShadowDepth);hash.Add(settings.ActorShadowMaxOffset);hash.Add(settings.ActorShadowMaxOpacity);
             hash.Add(settings.ActorShadowMoveThreshold);hash.Add(settings.ActorShadowMaxSources);hash.Add(parts.Count);hash.Add(sources.Count);
-            hash.Add(settings.ActorShadowMaxScale);
+            hash.Add(settings.ActorShadowMaxScale);hash.Add(wallMounted);
             for(int i=0;i<parts.Count;i++)
             {
                 var part=parts[i];hash.Add(part.Sprite!=null?part.Sprite.GetInstanceID():0);hash.Add(part.Mesh!=null?part.Mesh.GetInstanceID():0);

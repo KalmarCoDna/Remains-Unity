@@ -15,5 +15,6 @@ MonoBehaviour:
   version: 1
   definition: medbox
   mode: 1
+  wallMounted: 1
   closed: {fileID: 21300000, guid: 390da0474b6a407f9c2cc4e67901f57e, type: 3}
   opened: {fileID: 21300000, guid: bab73e150ae54e188641d80e6a7233c5, type: 3}

@@ -132,6 +132,26 @@ namespace Remains.Editor
             if(masks.Count!=2 || masks.Any(mask=>mask.Mask==original[2].Mask))
                 throw new InvalidOperationException("Скрытый ящик оставил проекцию.");
             Debug.Log($"Object projected shadows PASS: two woodbox props and ammobox container, source {fromLight}, overlap, cache and visibility.");
+
+            var wall=PropCatalog.Get("wallcab");
+            const string wallId="wall-cabinet";
+            var cabinet=new ContainerState {id=wallId,definition=wall.id,level=layout.id,
+                x=start.x,y=start.y,width=wall.width,height=wall.height,anchorHeight=wall.height*.5f};
+            var wallView=artwork.CreateContainerView(cabinet);
+            wallView.transform.SetParent(visuals.transform);
+            wallView.DrawMotion(cabinet,"local",false,0);
+            var containers=(Dictionary<string,PropView>)typeof(InteractionVisuals)
+                .GetField("containers",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(visuals);
+            containers.Add(wallId,wallView);
+            presentation.PrepareFlash(level,actors,visuals,light,flash);
+            presentation.Present(level,actors,visuals,emissions,ids);
+            presentation.CollectProjectedLightShadows(masks);
+            var cabinetMask=masks.Single(mask=>mask.Mask!=original[0].Mask && mask.Mask!=original[1].Mask);
+            var cabinetCenter=(Vector2)wallView.Artwork.bounds.center;
+            float distance=Vector2.Distance(cabinetMask.WorldBounds.center,cabinetCenter);
+            if(cabinetMask.SourceId!=light || distance>.081f)
+                throw new InvalidOperationException($"Профиль настенного шкафа не дошёл до проекции: смещение {distance:F3} м.");
+            Debug.Log($"Wall cabinet projected shadow PASS: prefab {wall.id}, offset {distance:F3} m.");
         }
         // Incremental player delivery after the full PrototypeBuild/ContractChecks
         // succeeded, for a final scoped shadow-only correction; not a substitute for admission.

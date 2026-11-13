@@ -15,5 +15,6 @@ MonoBehaviour:
   version: 1
   definition: cryocap
   mode: 0
+  wallMounted: 1
   closed: {fileID: 21300000, guid: f9aa9339264c940428fc8b6e792ce2c9, type: 3}
   opened: {fileID: 0}

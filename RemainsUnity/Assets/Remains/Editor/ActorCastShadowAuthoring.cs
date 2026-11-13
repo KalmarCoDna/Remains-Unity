@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using Remains.Content;
 using Remains.Presentation;
 using Remains.RoomFormat;
 using UnityEditor;
@@ -26,6 +28,11 @@ namespace Remains.Editor
             try {root.AddComponent<ActorCastShadowView>().Configure(material);PrefabUtility.SaveAsPrefabAsset(root,PrefabPath);AssetDatabase.SaveAssets();}
             finally {UnityEngine.Object.DestroyImmediate(root);}
         }
+        public static void CheckBatch()
+        {
+            try {Check();EditorApplication.Exit(0);}
+            catch(Exception error) {Debug.LogException(error);EditorApplication.Exit(1);}
+        }
         public static void Check()
         {
             var actor=new Vector2(2,3);
@@ -43,6 +50,7 @@ namespace Remains.Editor
             Require(ActorCastShadowView.ShadowOrder>WorldVisualOrderPolicy.SceneryRoomOrder && ActorCastShadowView.ShadowOrder<WorldVisualOrderPolicy.FirstOrder(WorldVisualCategory.Scenery),"Тень пересекает порядок декорации/актёров.");
             var prefab=AssetDatabase.LoadAssetAtPath<ActorCastShadowView>(PrefabPath);
             Require(prefab!=null,"Не создан авторский префаб тени.");prefab.Validate();
+            CheckMountedProfiles();
             CheckMask(prefab);
             Debug.Log("ActorCastShadowAuthoring: PASS — направление, ограничение смещения, полутень, порядок и авторский материал.");
         }
@@ -91,11 +99,88 @@ namespace Remains.Editor
                 view.Draw(Vector2.zero,parts,new[]{new ActorShadowSource("weak-flash",new Vector2(2,0),.05f,.01f,true,2.2f)},settings);
                 projected.Clear();view.AppendProjectedLightShadows(projected);
                 Require(projected.Count==1 && Mathf.Abs(projected[0].Opacity-(float)settings.ActorShadowMaxOpacity)<.00001f,"Сила вспышки изменяет покрытие тени вместо силы исходного света.");
+                CheckMountedProjection(view,mesh,texture);
                 CheckWallProjection(view,texture);
                 view.Clear();Require(view.ActiveSourceCount==0,"Clear оставил активную тень.");
                 Debug.Log($"ActorCastShadowAuthoring: GPU union alpha={unionAlpha:F4}; mirror, исходные mesh/матрица и Clear PASS.");
             }
             finally {RenderTexture.active=oldTarget;if(read!=null) UnityEngine.Object.DestroyImmediate(read);UnityEngine.Object.DestroyImmediate(view.gameObject);UnityEngine.Object.DestroyImmediate(mesh);UnityEngine.Object.DestroyImmediate(texture);}
+        }
+        private static void CheckMountedProfiles()
+        {
+            var catalog=AssetDatabase.LoadAssetAtPath<FactoryLootCatalog>("Assets/Remains/Resources/Content/FactoryLoot.asset");
+            Require(catalog!=null,"Нет каталога контейнеров завода.");
+            int wall=0,floor=0;
+            foreach(var entry in catalog.definitions)
+            {
+                if(entry.physical==null) continue;
+                var profile=entry.physical.Prefab?.ContainerArtwork;
+                Require(profile!=null,$"Нет профиля графики заводского контейнера {entry.id}.");
+                bool expected=((int?)catalog.DefinitionXml(entry.id).Attribute("wall")??0)>0;
+                Require(profile.WallMounted==expected,$"Профиль {entry.id} не совпал с исходной отметкой настенного крепления.");
+                if(expected) wall++;else floor++;
+            }
+            Require(wall>0 && floor>0,"Каталог проверки должен включать настенные и напольные контейнеры.");
+            Debug.Log($"Профили теней контейнеров: PASS — настенные {wall}, напольные {floor}, проверено по исходному wall.");
+        }
+        private static void CheckMountedProjection(ActorCastShadowView view,Mesh mesh,Texture texture)
+        {
+            var parts=new[]{new LightOccluder(mesh,texture,Matrix4x4.Scale(new Vector3(.2f,1,1)))};
+            var sources=new[]{
+                new ActorShadowSource("lamp",new Vector2(-6,0),.04f,1),
+                new ActorShadowSource("horn",new Vector2(6,0),.04f,1,true,1.5f),
+                new ActorShadowSource("fire",new Vector2(-6,0),.04f,1,true,1.5f),
+                new ActorShadowSource("flash",new Vector2(6,0),.04f,1,true,1.5f)
+            };
+            var settings=new RoomLightingTable{ActorShadowDepth=.2,ActorShadowMaxOffset=.5,ActorShadowMaxOpacity=.65,ActorShadowMaxScale=3};
+            var masks=new List<ProjectedLightShadow>();
+            Texture2D read=null;var previous=RenderTexture.active;
+            try
+            {
+                view.Prepare(parts,sources.Length);
+                view.Draw(Vector2.zero,parts,sources,settings);
+                ReadMasks(false);
+                int floorRevision=view.MaskRebuilds,poseRevision=view.PoseMaskRebuilds;
+                view.Draw(Vector2.zero,parts,sources,settings,wallMounted:true);
+                Require(view.MaskRebuilds==floorRevision+1 && view.PoseMaskRebuilds==poseRevision,
+                    "Смена крепления должна обновить проекции и сохранить исходный силуэт.");
+                ReadMasks(true);
+                int wallRevision=view.MaskRebuilds;
+                view.Draw(Vector2.zero,parts,sources,settings,wallMounted:true);
+                Require(view.MaskRebuilds==wallRevision,"Неизменная настенная проекция повторно перерисовала маски.");
+                view.Draw(Vector2.zero,parts,sources,settings);
+                Require(view.MaskRebuilds==wallRevision+1,"Возврат напольного профиля оставил короткую тень в кеше.");
+                ReadMasks(false);
+                Debug.Log("Контактные тени настенных контейнеров: PASS — лампа, рог, огонь и вспышка, границы масок и кеш.");
+            }
+            finally {RenderTexture.active=previous;if(read!=null) UnityEngine.Object.DestroyImmediate(read);}
+
+            void ReadMasks(bool mounted)
+            {
+                masks.Clear();view.AppendProjectedLightShadows(masks);
+                Require(masks.Count==sources.Length,"Потеряны отдельные маски источников.");
+                for(int i=0;i<sources.Length;i++)
+                {
+                    var source=sources[i];var mask=masks[i];float direction=-Mathf.Sign(source.Position.x);
+                    Require(mask.SourceId==source.Id && mask.Mask is RenderTexture && Mathf.Abs(mask.Opacity-.65f)<.00001f,
+                        $"Неверная отдельная маска или покрытие: {source.Id}.");
+                    var target=(RenderTexture)mask.Mask;var rect=mask.WorldBounds;
+                    read??=new Texture2D(target.width,target.height,TextureFormat.RGBA32,false,true);
+                    RenderTexture.active=target;read.ReadPixels(new Rect(0,0,target.width,target.height),0,0);read.Apply();
+                    var bounds=new Bounds(rect.center,new Vector3(rect.width,rect.height,0));
+                    if(mounted)
+                    {
+                        Require(Mathf.Abs(rect.center.x)<=.0801f && rect.height<=1.06f,
+                            $"Контактная проекция сместилась или растянулась: {source.Id}, {rect}.");
+                        Require(WorldAlpha(read,bounds,new Vector2(direction*.15f,0))>.4f &&
+                            WorldAlpha(read,bounds,new Vector2(-direction*.15f,0))<.01f &&
+                            WorldAlpha(read,bounds,new Vector2(direction*.25f,0))<.01f,
+                            $"Настенная тень не осталась у силуэта и по направлению от источника: {source.Id}.");
+                    }
+                    else Require(WorldAlpha(read,bounds,new Vector2(direction*.5f,0))>.4f,
+                        $"Прежняя длинная проекция напольного контейнера потеряна: {source.Id}.");
+                }
+            }
         }
         private static void CheckWallProjection(ActorCastShadowView view,Texture texture)
         {

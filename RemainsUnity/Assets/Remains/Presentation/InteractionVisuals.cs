@@ -72,7 +72,7 @@ namespace Remains.Presentation
         public PropView FindProp(string id)=>props.TryGetValue(id,out var view)?view:null;
         public PropView FindContainer(string id)=>containers.TryGetValue(id,out var view)?view:null;
         internal void CollectBodyShadowCasters(Rect area,float maxOffset,float maxScale,
-            List<(WorldVisualKind Kind,string Id,Vector2 Center,LightOccluder Shape)> output)
+            List<(WorldVisualKind Kind,string Id,Vector2 Center,LightOccluder Shape,bool WallMounted)> output)
         {
             output.Clear();
             Collect(props,WorldVisualKind.Prop);Collect(containers,WorldVisualKind.Container);
@@ -81,7 +81,10 @@ namespace Remains.Presentation
                 foreach(var pair in views)
                 {
                     var view=pair.Value;var bounds=view.ShadowBounds;
-                    float margin=maxOffset+Mathf.Max(bounds.extents.x,bounds.extents.y)*(maxScale-1);
+                    bool wallMounted=view.ContainerArtwork?.WallMounted==true;
+                    float extent=Mathf.Max(bounds.extents.x,bounds.extents.y);
+                    float margin=wallMounted?ActorCastShadowView.WallContactOffset+extent*ActorCastShadowView.WallContactDepth:
+                        maxOffset+extent*(maxScale-1);
                     if(!area.Overlaps(Rect.MinMaxRect(bounds.min.x-margin,bounds.min.y-margin,bounds.max.x+margin,bounds.max.y+margin)))continue;
                     var renderer=view.Artwork;
                     if(!renderer.enabled || renderer.forceRenderingOff || !renderer.gameObject.activeInHierarchy)continue;
@@ -90,7 +93,7 @@ namespace Remains.Presentation
                     var matrix=renderer.localToWorldMatrix;
                     if(renderer.flipX || renderer.flipY)
                         matrix*=Matrix4x4.Scale(new Vector3(renderer.flipX?-1:1,renderer.flipY?-1:1,1));
-                    output.Add((kind,pair.Key,bounds.center,new LightOccluder(sprite,matrix,opacity)));
+                    output.Add((kind,pair.Key,bounds.center,new LightOccluder(sprite,matrix,opacity),wallMounted));
                 }
             }
         }

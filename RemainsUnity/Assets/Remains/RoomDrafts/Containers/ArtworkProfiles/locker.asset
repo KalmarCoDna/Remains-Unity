@@ -15,5 +15,6 @@ MonoBehaviour:
   version: 1
   definition: locker
   mode: 1
+  wallMounted: 1
   closed: {fileID: 21300000, guid: a96d8a7d7e39598bbda49cfd1e65952a, type: 3}
   opened: {fileID: 21300000, guid: ceb1f1ff70165c9b8fa860115045b6fe, type: 3}

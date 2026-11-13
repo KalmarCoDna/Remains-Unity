@@ -11,6 +11,7 @@ namespace Remains.Editor
             serializedObject.Update();
             EditorGUILayout.PropertyField(serializedObject.FindProperty("version"));
             EditorGUILayout.PropertyField(serializedObject.FindProperty("definition"));
+            EditorGUILayout.PropertyField(serializedObject.FindProperty("wallMounted"));
             var mode=serializedObject.FindProperty("mode");EditorGUILayout.PropertyField(mode);
             EditorGUILayout.PropertyField(serializedObject.FindProperty("closed"));
             if(mode.enumValueIndex==(int)ContainerArtworkMode.ClosedOpened)
